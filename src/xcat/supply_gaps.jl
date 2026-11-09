@@ -33,53 +33,90 @@ branch in `added`, the gap volumes found in each round in `gaps`, and in `unfill
 crossing a blocker or a region boundary (an organ region with no imaged vessel of its own).
 """
 function fill_supply_gaps(
-        parent::AbstractVector{<:Integer}, X::AbstractMatrix{<:Real}, r::AbstractVector{<:Real}, domain::AbstractArray{Bool, 3}, lower;
-        r_resolved::Real, h::Real = 1.0, max_gap_mm = nothing, min_gap_ml = nothing, qexp::Real = 7 / 3, step_mm::Real = 2.0,
-        forbidden::Union{Nothing, AbstractArray{Bool, 3}} = nothing, region::Union{Nothing, AbstractArray{<:Integer, 3}} = nothing,
-        free_mm::Real = 3.0, max_iter::Integer = 200
-    )
-    par = Int.(collect(parent)); P = [Float64.(X[:, k]) for k in axes(X, 2)]; R = Float64.(collect(r))
-    lo = Float64.(collect(lower)); dims = size(domain)
-    vox = findall(domain); vml = h^3 / 1000; Vdom = length(vox) * vml
-    root = findfirst(==(0), par); rroot = R[root]
-    Vmax = Vdom * (r_resolved / rroot)^qexp                    # mL: the most an unresolved vessel can supply
+    parent::AbstractVector{<:Integer},
+    X::AbstractMatrix{<:Real},
+    r::AbstractVector{<:Real},
+    domain::AbstractArray{Bool, 3},
+    lower;
+    r_resolved::Real,
+    h::Real = 1.0,
+    max_gap_mm = nothing,
+    min_gap_ml = nothing,
+    qexp::Real = 7 / 3,
+    step_mm::Real = 2.0,
+    forbidden::Union{Nothing, AbstractArray{Bool, 3}} = nothing,
+    region::Union{Nothing, AbstractArray{<:Integer, 3}} = nothing,
+    free_mm::Real = 3.0,
+    max_iter::Integer = 200,
+)
+    par = Int.(collect(parent))
+    P = [Float64.(X[:, k]) for k in axes(X, 2)]
+    R = Float64.(collect(r))
+    lo = Float64.(collect(lower))
+    dims = size(domain)
+    vox = findall(domain)
+    vml = h^3 / 1000
+    Vdom = length(vox) * vml
+    root = findfirst(==(0), par)
+    rroot = R[root]
+    Vmax = Vdom * (r_resolved / rroot)^qexp # mL: the most an unresolved vessel can supply
     min_gap_ml = min_gap_ml === nothing ? Vmax : Float64(min_gap_ml)
     max_gap_mm = max_gap_mm === nothing ? cbrt(3 * Vmax * 1000 / (4π)) : Float64(max_gap_mm)
     centre(I) = lo .+ (Tuple(I) .- 1) .* h
-    vidx(p) = (I = round.(Int, (p .- lo) ./ h) .+ 1; all(1 .<= I .<= dims) ? CartesianIndex(I...) : nothing)
+    vidx(p) = (
+        I = round.(Int, (p .- lo) ./ h) .+ 1;
+        all(1 .<= I .<= dims) ? CartesianIndex(I...) : nothing
+    )
     blocked(I) = I !== nothing && forbidden !== nothing && forbidden[I]
     # the straight path a → t: never through a blocker; past the first free_mm, inside the organ and the target's region
     function path_ok(a, t)
-        L = sqrt(sum(abs2, t .- a)); ns = max(2, ceil(Int, 4L / h)); It = vidx(t); rt = region === nothing || It === nothing ? 0 : region[It]
+        L = sqrt(sum(abs2, t .- a))
+        ns = max(2, ceil(Int, 4L / h))
+        It = vidx(t)
+        rt = region === nothing || It === nothing ? 0 : region[It]
         for s in 0:ns
-            p = a .+ (s / ns) .* (t .- a); I = vidx(p); blocked(I) && return false
+            p = a .+ (s / ns) .* (t .- a)
+            I = vidx(p)
+            blocked(I) && return false
             s * L / ns <= free_mm && continue
             (I === nothing || !domain[I]) && return false
             region === nothing || region[I] == rt || return false
         end
         return true
     end
-    added = NamedTuple[]; gaps = Vector{Float64}[]; unfilled = Float64[]
+    added = NamedTuple[]
+    gaps = Vector{Float64}[]
+    unfilled = Float64[]
     for _ in 1:max_iter
         d = _distance_to_tree(par, P, vox, lo, h)
-        far = falses(dims); for (i, I) in enumerate(vox)
+        far = falses(dims)
+        for (i, I) in enumerate(vox)
             d[i] > max_gap_mm && (far[I] = true)
         end
         # gaps per region: a gap is filled from its own side (left / right lung, lobe, ...)
-        comps = region === nothing ? _components(far) : reduce(vcat, [_components(far .& (region .== v)) for v in unique(region[vox])])
-        sizes = [length(c) * vml for c in comps]; push!(gaps, sort(sizes; rev = true))
+        comps = region === nothing ?
+            _components(far) :
+            reduce(vcat, [_components(far .& (region .== v)) for v in unique(region[vox])])
+        sizes = [length(c) * vml for c in comps]
+        push!(gaps, sort(sizes; rev = true))
         big = [c for c in comps if length(c) * vml >= min_gap_ml]
         isempty(big) && break
         nadd = length(added)
         for c in sort(big; by = length, rev = true)
-            Vg = length(c) * vml; rn = rroot * (Vg / Vdom)^(1 / qexp)
+            Vg = length(c) * vml
+            rn = rroot * (Vg / Vdom)^(1 / qexp)
             cen = sum(centre(I) for I in c) ./ length(c)
             tgt = centre(c[argmin([sum(abs2, centre(I) .- cen) for I in c])])
             # nearest node that is thick enough and reaches the target through the organ
-            cand = sort([k for k in eachindex(P) if R[k] >= rn]; by = k -> sum(abs2, P[k] .- tgt))
+            cand = sort(
+                [k for k in eachindex(P) if R[k] >= rn];
+                by = k -> sum(abs2, P[k] .- tgt),
+            )
             # the start point: the node itself, or the midpoint of its parent segment when it already branches twice
             # (no node gets three children); the path is checked from the point the branch really starts at
-            start(k) = count(==(k), par) >= 2 && par[k] != 0 ? (P[k] .+ P[par[k]]) ./ 2 : P[k]
+            start(k) = count(==(k), par) >= 2 && par[k] != 0 ?
+                (P[k] .+ P[par[k]]) ./ 2 :
+                P[k]
             a = 0
             for k in cand
                 count(==(k), par) >= 2 && par[k] == 0 && continue
@@ -87,17 +124,34 @@ function fill_supply_gaps(
             end
             a == 0 && continue
             if count(==(a), par) >= 2
-                p = par[a]; push!(P, (P[a] .+ P[p]) ./ 2); push!(R, R[a]); push!(par, p); par[a] = length(P); a = length(P)
+                p = par[a]
+                push!(P, (P[a] .+ P[p]) ./ 2)
+                push!(R, R[a])
+                push!(par, p)
+                par[a] = length(P)
+                a = length(P)
             end
-            L = sqrt(sum(abs2, tgt .- P[a])); m = max(1, round(Int, L / step_mm)); prev = a
+            L = sqrt(sum(abs2, tgt .- P[a]))
+            m = max(1, round(Int, L / step_mm))
+            prev = a
             for i in 1:m
-                push!(P, P[a] .+ (i / m) .* (tgt .- P[a])); push!(R, rn); push!(par, prev); prev = length(P)
+                push!(P, P[a] .+ (i / m) .* (tgt .- P[a]))
+                push!(R, rn)
+                push!(par, prev)
+                prev = length(P)
             end
-            push!(added, (; from = a, radius_mm = rn, length_mm = L, gap_ml = Vg, target = tgt))
+            push!(
+                added,
+                (; from = a, radius_mm = rn, length_mm = L, gap_ml = Vg, target = tgt),
+            )
         end
-        length(added) == nadd && (unfilled = [length(c) * vml for c in big]; break)     # no gap reachable any more
+        length(added) == nadd &&
+            (unfilled = [length(c) * vml for c in big]; break) # no gap reachable any more
     end
-    return (; parent = par, X = reduce(hcat, P), r = R, added, gaps, unfilled, max_gap_mm, min_gap_ml)
+    return (; parent = par, X = reduce(
+        hcat,
+        P,
+    ), r = R, added, gaps, unfilled, max_gap_mm, min_gap_ml)
 end
 
 # distance (mm) from each listed domain voxel to the nearest point of any segment, via a uniform bucket grid of
@@ -105,19 +159,26 @@ end
 function _distance_to_tree(par, P, vox, lo, h)
     pts = Vector{Float64}[]
     for k in eachindex(par)
-        p = par[k]; p == 0 && (push!(pts, P[k]); continue)
-        L = sqrt(sum(abs2, P[k] .- P[p])); ns = max(1, ceil(Int, 2L / h))
+        p = par[k]
+        p == 0 && (push!(pts, P[k]); continue)
+        L = sqrt(sum(abs2, P[k] .- P[p]))
+        ns = max(1, ceil(Int, 2L / h))
         for s in 0:ns
             push!(pts, P[p] .+ (s / ns) .* (P[k] .- P[p]))
         end
     end
-    cell = 8.0; key(p) = (floor(Int, p[1] / cell), floor(Int, p[2] / cell), floor(Int, p[3] / cell))
-    grid = Dict{NTuple{3, Int}, Vector{Int}}(); for (i, p) in enumerate(pts)
+    cell = 8.0
+    key(p) = (floor(Int, p[1] / cell), floor(Int, p[2] / cell), floor(Int, p[3] / cell))
+    grid = Dict{NTuple{3, Int}, Vector{Int}}()
+    for (i, p) in enumerate(pts)
         push!(get!(grid, key(p), Int[]), i)
     end
     d = fill(Inf, length(vox))
     AK.foreachindex(d; min_elems = 1024) do i
-        q = lo .+ (Tuple(vox[i]) .- 1) .* h; c = key(q); best = Inf; ring = 0
+        q = lo .+ (Tuple(vox[i]) .- 1) .* h
+        c = key(q)
+        best = Inf
+        ring = 0
         while true
             for a in -ring:ring, b in -ring:ring, e in -ring:ring
                 max(abs(a), abs(b), abs(e)) == ring || continue
@@ -125,8 +186,10 @@ function _distance_to_tree(par, P, vox, lo, h)
                     best = min(best, sum(abs2, pts[j] .- q))
                 end
             end
-            sqrt(best) <= ring * cell && break      # every unvisited point is at least ring·cell away
-            ring += 1; ring > 64 && break
+            sqrt(best) <=
+                ring * cell && break # every unvisited point is at least ring·cell away
+            ring += 1
+            ring > 64 && break
         end
         d[i] = sqrt(best)
     end
@@ -135,15 +198,30 @@ end
 
 # connected components (6-neighbour) of a Bool volume
 function _components(M::AbstractArray{Bool, 3})
-    seen = falses(size(M)); out = Vector{Vector{CartesianIndex{3}}}()
-    nb = (CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0), CartesianIndex(0, 1, 0), CartesianIndex(0, -1, 0), CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1))
+    seen = falses(size(M))
+    out = Vector{Vector{CartesianIndex{3}}}()
+    nb = (
+        CartesianIndex(1, 0, 0),
+        CartesianIndex(-1, 0, 0),
+        CartesianIndex(0, 1, 0),
+        CartesianIndex(0, -1, 0),
+        CartesianIndex(0, 0, 1),
+        CartesianIndex(0, 0, -1),
+    )
     for I in CartesianIndices(M)
         (M[I] && !seen[I]) || continue
-        comp = CartesianIndex{3}[]; st = [I]; seen[I] = true
+        comp = CartesianIndex{3}[]
+        st = [I]
+        seen[I] = true
         while !isempty(st)
-            J = pop!(st); push!(comp, J)
+            J = pop!(st)
+            push!(comp, J)
             for o in nb
-                K = J + o; checkbounds(Bool, M, K) && M[K] && !seen[K] && (seen[K] = true; push!(st, K))
+                K = J + o
+                checkbounds(Bool, M, K) &&
+                    M[K] &&
+                    !seen[K] &&
+                    (seen[K] = true; push!(st, K))
             end
         end
         push!(out, comp)

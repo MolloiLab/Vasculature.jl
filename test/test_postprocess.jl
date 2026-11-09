@@ -27,7 +27,14 @@ function compare_internals(path, r)
     @test [parse(Int, x[1]) for x in rows] == r.strahler
     @test [parse(Int, x[2]) + 1 for x in rows] == r.seg2elem
     @test [parse(Int, x[4]) for x in rows] == r.orders
-    sol = (h.resting.flow, h.resting.pressure, h.resting.wss, h.stress.flow, h.stress.pressure, h.stress.wss)
+    sol = (
+        h.resting.flow,
+        h.resting.pressure,
+        h.resting.wss,
+        h.stress.flow,
+        h.stress.pressure,
+        h.stress.wss,
+    )
     for k in 1:6
         @test [parse(Float64, x[4 + k]) for x in rows] == sol[k]
     end
@@ -45,7 +52,13 @@ function compare_obj(ref, ours)
         ndiff += 1
         fa, fb = split(a), split(b)
         @test fa[1] == fb[1] && fa[1] in ("v", "vn")
-        maxdiff = max(maxdiff, maximum(abs(parse(Float64, x) - parse(Float64, y)) for (x, y) in zip(fa[2:end], fb[2:end])))
+        maxdiff = max(
+            maxdiff,
+            maximum(
+                abs(parse(Float64, x) - parse(Float64, y))
+                for (x, y) in zip(fa[2:end], fb[2:end])
+            )
+        )
     end
     @test nl == countlines(ref) - 1 == countlines(ours) - 1
     @test ndiff <= nl ÷ 100
@@ -61,10 +74,31 @@ end
         @test C._np_percentile([1.0, 2.0, 3.0, 4.0], 75) == 3.25
         @test C._np_percentile([5.0], 25) == 5.0
         @test isnan(C._np_std([1.0]; ddof = 1))
-        @test C._np_sum(fill(0.1, 1000)) == 100.00000000000001   # np.sum(np.full(1000, 0.1))
-        @test C._pyfmt(NaN, 3) == "nan" && C._pyfmt(2.5, 0) == "2" && C._pyfmt(0.125, 2) == "0.12"
-        @test [C._to_chars(x) for x in (0.0, 23.0, -26.52526092529297, 1.0e-5, 0.000123, 2.9943092158646323e-5, 1.0e21)] ==
-            ["0", "23", "-26.52526092529297", "1e-05", "0.000123", "2.9943092158646323e-05", "1e+21"]
+        @test C._np_sum(fill(0.1, 1000)) == 100.00000000000001 # np.sum(np.full(1000, 0.1))
+        @test C._pyfmt(NaN, 3) == "nan" &&
+            C._pyfmt(2.5, 0) == "2" &&
+            C._pyfmt(0.125, 2) == "0.12"
+        @test [
+            C._to_chars(x)
+            for x in (
+                0.0,
+                23.0,
+                -26.52526092529297,
+                1.0e-5,
+                0.000123,
+                2.9943092158646323e-5,
+                1.0e21,
+            )
+        ] ==
+            [
+                "0",
+                "23",
+                "-26.52526092529297",
+                "1e-05",
+                "0.000123",
+                "2.9943092158646323e-05",
+                "1e+21",
+            ]
         @test C.literature_order_of(3.176) == 11 && C.literature_order_of(0.009) == 1
     end
 
@@ -74,11 +108,16 @@ end
         xml = export_gxl(E.m, joinpath(dir, "tree.xml"))
         prefix = joinpath(dir, "out", "pp")
         r = postprocess(xml, prefix; domain_vol = sample("case0.vol"), verbose = false)
-        n = nsegments(E.m) - 1                          # one XML edge per non-root-node segment
+        n = nsegments(E.m) - 1 # one XML edge per non-root-node segment
         @test length(r.orders) == length(r.diameters) == n
         @test all(1 .<= r.orders .<= 11)
-        @test r.diameters == 2 .* parse.(Float64, Vasculature._g.(E.m.radius[2:end]))   # XML keeps %g
-        for suffix in ("_tree.vtp", "_tree.obj", (string("_", k, ".csv") for k in PP_CSV)...)
+        @test r.diameters ==
+            2 .* parse.(Float64, Vasculature._g.(E.m.radius[2:end])) # XML keeps %g
+        for suffix in (
+                "_tree.vtp",
+                "_tree.obj",
+                (string("_", k, ".csv") for k in PP_CSV)...
+            )
             @test isfile(prefix * suffix)
         end
         @test readline(prefix * "_diameter_stats.csv") == "Order,Diameter (units) ± SD"
@@ -87,7 +126,7 @@ end
         @test countlines(prefix * "_tree.obj") == 1 + n * (4 * 24 * 2 + 2 * 24 + 2 * 22)
         # the network solve conserves flow, keeps 100 mmHg at the inlet side and drops pressure
         h = r.hemodynamics
-        @test h.mass_g ≈ 254.98 * 1.05                  # 254,980 voxels > 128, 1 mm^3 each
+        @test h.mass_g ≈ 254.98 * 1.05 # 254,980 voxels > 128, 1 mm^3 each
         @test Vasculature.domain_mass_g(sample("case0.vol"); mass = :upstream)[1] ≈ 41.7396
         st = h.stress
         net = Vasculature._hemo_network(r.tree)
@@ -108,25 +147,46 @@ end
         @test siblings(Vasculature.diameter_defined_orders(tp; elements = :upstream)) > 0
     end
 
-    refs = isdir(PP_DIR) ? [m.captures[1] for m in filter(!isnothing, match.(r"^tree(\w+)\.xml$", readdir(PP_DIR)))] : String[]
+    refs = isdir(PP_DIR) ?
+        [
+            m.captures[1]
+            for m in filter(!isnothing, match.(r"^tree(\w+)\.xml$", readdir(PP_DIR)))
+        ] :
+        String[]
     filter!(n -> all(isfile(joinpath(PP_DIR, "ref$(n)_$k.csv")) for k in PP_CSV), refs)
     if isempty(refs)
         @info "post-processing: no upstream reference outputs in test/oracle/out/pp; skipping the comparison"
     end
-    smallest = isempty(refs) ? "" : refs[argmin(filesize.(joinpath.(PP_DIR, "tree" .* refs .* ".xml")))]
+    smallest = isempty(refs) ?
+        "" :
+        refs[argmin(filesize.(joinpath.(PP_DIR, "tree" .* refs .* ".xml")))]
     @testset "matches upstream coronary_postprocess.py on tree$n" for n in refs
         dir = mktempdir()
         withobj = n == smallest && isfile(joinpath(PP_DIR, "ref$(n)_tree.obj"))
         r = postprocess(
-            joinpath(PP_DIR, "tree$n.xml"), joinpath(dir, "jl"); obj = withobj,
-            domain_vol = joinpath(PP_DIR, "..", "..", "build", "src", "samples", "case0.vol"),
-            verbose = false, mass = :upstream, elements = :upstream
+            joinpath(PP_DIR, "tree$n.xml"),
+            joinpath(dir, "jl");
+            obj = withobj,
+            domain_vol = joinpath(
+                PP_DIR,
+                "..",
+                "..",
+                "build",
+                "src",
+                "samples",
+                "case0.vol",
+            ),
+            verbose = false,
+            mass = :upstream,
+            elements = :upstream,
         )
         for k in PP_CSV
-            @test read(joinpath(dir, "jl_$k.csv"), String) == read(joinpath(PP_DIR, "ref$(n)_$k.csv"), String)
+            @test read(joinpath(dir, "jl_$k.csv"), String) ==
+                read(joinpath(PP_DIR, "ref$(n)_$k.csv"), String)
         end
         internals = joinpath(PP_DIR, "ref$(n)_internals.txt")
         isfile(internals) && compare_internals(internals, r)
-        withobj && compare_obj(joinpath(PP_DIR, "ref$(n)_tree.obj"), joinpath(dir, "jl_tree.obj"))
+        withobj &&
+            compare_obj(joinpath(PP_DIR, "ref$(n)_tree.obj"), joinpath(dir, "jl_tree.obj"))
     end
 end

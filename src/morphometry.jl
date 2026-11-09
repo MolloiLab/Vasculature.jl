@@ -5,8 +5,32 @@
 
 "Kassab et al. 1993 porcine coronary arterial diameters by order 1..11 (mm): mean and SD
 (the MU/SD arrays of upstream's coronary_postprocess.py)."
-const LITERATURE_MU = [0.009, 0.013, 0.0187, 0.0346, 0.0716, 0.15, 0.303, 0.467, 0.715, 1.492, 3.176]
-const LITERATURE_SD = [0.0009, 0.0017, 0.0026, 0.0074, 0.0172, 0.035, 0.054, 0.056, 0.13, 0.3, 0.6]
+const LITERATURE_MU = [
+    0.009,
+    0.013,
+    0.0187,
+    0.0346,
+    0.0716,
+    0.15,
+    0.303,
+    0.467,
+    0.715,
+    1.492,
+    3.176,
+]
+const LITERATURE_SD = [
+    0.0009,
+    0.0017,
+    0.0026,
+    0.0074,
+    0.0172,
+    0.035,
+    0.054,
+    0.056,
+    0.13,
+    0.3,
+    0.6,
+]
 
 """
     dds_orders(m; maxiter = 100, tol = 0.01) -> NamedTuple
@@ -32,20 +56,28 @@ function dds_orders(m::CCOModel; maxiter::Int = 100, tol::Real = 0.01)
     post = postorder(m)
     d = [j == 1 ? 0.0 : 2 * Float64(m.radius[j]) for j in 1:n]
     order = zeros(Int, n)
-    for j in post                      # 1. topological Strahler
-        a = m.left[j]; b = m.right[j]
-        order[j] = a == 0 && b == 0 ? 1 : a == 0 || b == 0 ? order[a == 0 ? b : a] :
-            order[a] == order[b] ? order[a] + 1 : max(order[a], order[b])
+    for j in post
+        # 1. topological Strahler
+        a = m.left[j]
+        b = m.right[j]
+        order[j] = a == 0 && b == 0 ?
+            1 :
+            a == 0 || b == 0 ?
+                order[a == 0 ? b : a] :
+                order[a] == order[b] ? order[a] + 1 : max(order[a], order[b])
     end
-    elems = nothing; iters = 0
+    elems = nothing
+    iters = 0
     while true
         elems = _elements(m, order)
         iters >= maxiter && break
         iters += 1
         up = _upper_bounds(elems, d, order)
         new = zeros(Int, n)
-        for j in post                  # 3. diameter-gated promotion at confluences
-            a = m.left[j]; b = m.right[j]
+        for j in post
+            # 3. diameter-gated promotion at confluences
+            a = m.left[j]
+            b = m.right[j]
             if a == 0 && b == 0
                 new[j] = 1
             else
@@ -63,7 +95,9 @@ function dds_orders(m::CCOModel; maxiter::Int = 100, tol::Real = 0.01)
         sel = D[eorder .== o]
         μ = isempty(sel) ? NaN : sum(sel) / length(sel)
         (
-            order = o, count = length(sel), mean = μ,
+            order = o,
+            count = length(sel),
+            mean = μ,
             sd = isempty(sel) ? NaN : sqrt(sum(abs2, sel .- μ) / length(sel)),
         )
     end
@@ -74,22 +108,32 @@ end
 # (order, mean diameter, total geometric length).
 function _elements(m::CCOModel, order)
     n = nsegments(m)
-    elem = zeros(Int, n); ne = 0
+    elem = zeros(Int, n)
+    ne = 0
     for j in 2:n
         elem[j] != 0 && continue
-        ne += 1; elem[j] = ne; stack = [j]
+        ne += 1
+        elem[j] = ne
+        stack = [j]
         while !isempty(stack)
             i = pop!(stack)
             for k in (m.parent[i], m.left[i], m.right[i])
                 (k <= 1 || elem[k] != 0 || order[k] != order[i]) && continue
-                elem[k] = ne; push!(stack, k)
+                elem[k] = ne
+                push!(stack, k)
             end
         end
     end
-    dsum = zeros(ne); cnt = zeros(Int, ne); len = zeros(ne); eo = zeros(Int, ne)
+    dsum = zeros(ne)
+    cnt = zeros(Int, ne)
+    len = zeros(ne)
+    eo = zeros(Int, ne)
     for j in 2:n
         e = elem[j]
-        dsum[e] += 2 * Float64(m.radius[j]); cnt[e] += 1; len[e] += Float64(m.glen[j]); eo[e] = order[j]
+        dsum[e] += 2 * Float64(m.radius[j])
+        cnt[e] += 1
+        len[e] += Float64(m.glen[j])
+        eo[e] = order[j]
     end
     return eo, dsum ./ cnt, len
 end
@@ -98,11 +142,13 @@ end
 function _upper_bounds(elems, d, order)
     eo, D, _ = elems
     K = maximum(eo)
-    μ = zeros(K); σ = zeros(K)
+    μ = zeros(K)
+    σ = zeros(K)
     for o in 1:K
         sel = D[eo .== o]
         isempty(sel) && continue
-        μ[o] = sum(sel) / length(sel); σ[o] = sqrt(sum(abs2, sel .- μ[o]) / length(sel))
+        μ[o] = sum(sel) / length(sel)
+        σ[o] = sqrt(sum(abs2, sel .- μ[o]) / length(sel))
     end
     return [((μ[o] + σ[o]) + (μ[o + 1] - σ[o + 1])) / 2 for o in 1:(K - 1)]
 end

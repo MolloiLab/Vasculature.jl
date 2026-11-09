@@ -6,18 +6,20 @@
 
 function TableOfContents(sections::Vector{Tuple{String, String}})
     return Nav(
-        :class => "hidden xl:block sticky top-28 self-start max-h-[calc(100vh-8rem)] overflow-y-auto",
+        :class =>
+            "hidden xl:block sticky top-28 self-start max-h-[calc(100vh-8rem)] overflow-y-auto",
         Div(
             :class => "space-y-1",
             P(:class => "text-xs font-medium tv-muted mb-3 px-3", "On This Page"),
             For(sections) do (id, label)
                 A(
                     :href => "#$id",
-                    :class => "block rounded-full px-3 py-1.5 text-[13px] tv-body no-underline hover:bg-[var(--pill-hover)] transition-colors",
-                    label
+                    :class =>
+                        "block rounded-full px-3 py-1.5 text-[13px] tv-body no-underline hover:bg-[var(--pill-hover)] transition-colors",
+                    label,
                 )
-            end
-        )
+            end,
+        ),
     )
 end
 

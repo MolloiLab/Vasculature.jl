@@ -52,10 +52,14 @@ function GrowthSpec(; kwargs...)
     miss = setdiff(fieldnames(GrowthSpec), keys(kwargs))
     isempty(miss) || throw(ArgumentError("GrowthSpec: no value for $(collect(miss))"))
     s = GrowthSpec((kwargs[f] for f in fieldnames(GrowthSpec))...)
-    s.split in (:free, :bifurcation) || throw(ArgumentError("GrowthSpec: split must be :free or :bifurcation"))
+    s.split in (:free, :bifurcation) ||
+        throw(ArgumentError("GrowthSpec: split must be :free or :bifurcation"))
     return s
 end
-GrowthSpec(s::GrowthSpec; kwargs...) = GrowthSpec(; merge((; (f => getfield(s, f) for f in fieldnames(GrowthSpec))...), values(kwargs))...)
+GrowthSpec(s::GrowthSpec; kwargs...) = GrowthSpec(; merge(
+    (; (f => getfield(s, f) for f in fieldnames(GrowthSpec))...),
+    values(kwargs),
+)...)
 
 """
     size_scale(spec::GrowthSpec) -> Float32
@@ -70,8 +74,11 @@ size_scale(s::GrowthSpec) = Float32(cbrt(s.tissue_ml / s.reference_ml))
 `spec.nterm` when given; otherwise the organ's flow over the flow of one terminal, `flow_ml_min / terminal_flow_ml_min`.
 """
 function terminal_count(s::GrowthSpec)
-    (s.nterm === nothing) == (s.flow_ml_min === nothing) && throw(ArgumentError("GrowthSpec: give exactly one of nterm and flow_ml_min"))
-    return s.nterm !== nothing ? s.nterm : round(Int, s.flow_ml_min / s.terminal_flow_ml_min)
+    (s.nterm === nothing) == (s.flow_ml_min === nothing) &&
+        throw(ArgumentError("GrowthSpec: give exactly one of nterm and flow_ml_min"))
+    return s.nterm !== nothing ?
+        s.nterm :
+        round(Int, s.flow_ml_min / s.terminal_flow_ml_min)
 end
 
 """
@@ -90,19 +97,48 @@ wall distance, full tree volume, batched on the chosen device. Only `spec` diffe
 - `territories`, `base_groups`: optional per-voxel tree-group bits and the group of each imaged segment, so each imaged
   vessel keeps the tissue nearest to it (see [`set_territories!`](@ref)).
 """
-function grow(spec::GrowthSpec, domain, inlets; root = nothing, blockers = nothing, territories = nothing, base_groups = nothing)
-    img, _ = read_vol(domain); V = count(>(MASK_THRESHOLD), img)
+function grow(
+    spec::GrowthSpec,
+    domain,
+    inlets;
+    root = nothing,
+    blockers = nothing,
+    territories = nothing,
+    base_groups = nothing,
+)
+    img, _ = read_vol(domain)
+    V = count(>(MASK_THRESHOLD), img)
     # perfusion area per voxel as upstream's sample run sets it (aperf 10000 over its 255,000-voxel case0 domain): HCT-CCO's
     # aperf is an area in voxel units, so it scales with the domain's voxel count
     caps = spec.root_caps === nothing ? 1.588 : spec.root_caps
-    shares = spec.split === :bifurcation && spec.root_caps !== nothing ? (w = spec.root_caps .^ spec.gamma; w ./ sum(w)) : nothing
+    shares = spec.split === :bifurcation && spec.root_caps !== nothing ?
+        (w = spec.root_caps.^spec.gamma; w ./ sum(w)) :
+        nothing
     return generate(
-        domain, inlets; nterm = terminal_count(spec), aperf = 10000 * V / 255000, min_dist = spec.wall_clearance, root = root,
-        seed = spec.seed, T = spec.T, gamma = spec.gamma, volume = :full, metric = :euclidean, sampling = :continuous,
-        fix_base = true, collision = :final, max_branch_angle = 90, root_radius_max = caps, root_fixed = spec.root_fixed,
+        domain,
+        inlets;
+        nterm = terminal_count(spec),
+        aperf = 10000 * V / 255000,
+        min_dist = spec.wall_clearance,
+        root = root,
+        seed = spec.seed,
+        T = spec.T,
+        gamma = spec.gamma,
+        volume = :full,
+        metric = :euclidean,
+        sampling = :continuous,
+        fix_base = true,
+        collision = :final,
+        max_branch_angle = 90,
+        root_radius_max = caps,
+        root_fixed = spec.root_fixed,
         root_shares = shares,
-        device = spec.device, territories = territories, base_groups = base_groups, forbidden = blockers,
-        symmetry_floor = spec.symmetry_floor, size_scale = size_scale(spec)
+        device = spec.device,
+        territories = territories,
+        base_groups = base_groups,
+        forbidden = blockers,
+        symmetry_floor = spec.symmetry_floor,
+        size_scale = size_scale(spec),
     )
 end
 
@@ -112,8 +148,14 @@ end
 The growth domain of an organ given as a closed surface mesh (`vertices` 3 × n in mm, `triangles` 3 × m, 1-based):
 the voxels of a 1 mm grid whose centres lie inside the mesh, written to `path` as a `.vol` for [`grow`](@ref).
 """
-function mesh_domain(path::AbstractString, X::AbstractMatrix, T::AbstractMatrix{<:Integer}; margin::Real = 3)
+function mesh_domain(
+    path::AbstractString,
+    X::AbstractMatrix,
+    T::AbstractMatrix{<:Integer};
+    margin::Real = 3,
+)
     g0 = grid_around(X, 1.0; margin)
-    lo = round.(Int, g0.origin); g = VoxelGrid(Float64.(lo), 1.0, g0.dims)
+    lo = round.(Int, g0.origin)
+    g = VoxelGrid(Float64.(lo), 1.0, g0.dims)
     return write_vol(path, voxelize(X, T, g), lo)
 end

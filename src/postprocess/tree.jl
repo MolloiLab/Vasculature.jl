@@ -44,7 +44,10 @@ function read_tree_xml(path::AbstractString)
     for m in eachmatch(_PP_EDGE, text)
         rm = match(_PP_RADIUS, m.captures[3])
         a, b = parse(Int, m.captures[2]) + 1, parse(Int, m.captures[1]) + 1
-        max(a, b) <= np || error("read_tree_xml: edge references node n$(max(a, b) - 1) without a position")
+        max(a, b) <= np ||
+            error(
+                "read_tree_xml: edge references node n$(max(a, b) - 1) without a position",
+            )
         push!(from, a)
         push!(to, b)
         push!(radius, rm === nothing ? 0.0 : parse(Float64, rm.captures[1]))
@@ -55,22 +58,29 @@ end
 # Lists of integers stored flat (`val`) with offsets (`off`): `r[i]` is a view of list i. One Vector{Int} per segment
 # costs ~60 bytes of overhead each, which a 68 M-segment lung tree cannot afford; the lists, their order and their
 # contents are the same.
-struct Ragged <: AbstractVector{SubArray{Int32, 1, Vector{Int32}, Tuple{UnitRange{Int}}, true}}
+struct Ragged <:
+    AbstractVector{SubArray{Int32, 1, Vector{Int32}, Tuple{UnitRange{Int}}, true}}
     off::Vector{Int}
     val::Vector{Int32}
 end
 Base.size(r::Ragged) = (length(r.off) - 1,)
-Base.@propagate_inbounds Base.getindex(r::Ragged, i::Int) = view(r.val, r.off[i]:(r.off[i + 1] - 1))
+Base.@propagate_inbounds Base.getindex(r::Ragged, i::Int) = view(
+    r.val,
+    r.off[i]:(r.off[i + 1] - 1),
+)
 
 # Lists from a count pass and a fill pass: `each(i, f)` calls f(x) for every member x of list i, in order.
 function _ragged(n::Int, each)
     off = ones(Int, n + 1)
     for i in 1:n
-        k = 0; each(i, _ -> (k += 1)); off[i + 1] = off[i] + k
+        k = 0
+        each(i, _ -> (k += 1))
+        off[i + 1] = off[i] + k
     end
     val = Vector{Int32}(undef, off[end] - 1)
     for i in 1:n
-        k = off[i]; each(i, x -> (val[k] = x; k += 1))
+        k = off[i]
+        each(i, x -> (val[k] = x; k += 1))
     end
     return Ragged(off, val)
 end
@@ -84,23 +94,30 @@ function segment_connections(t::PPTree; siblings::Bool = false)
     # segments at each point, in segment order (from and to of segment s, as upstream appends them)
     cnt = zeros(Int, length(t.points))
     for s in 1:n
-        cnt[t.from[s]] += 1; cnt[t.to[s]] += 1
+        cnt[t.from[s]] += 1
+        cnt[t.to[s]] += 1
     end
-    off = cumsum(vcat(1, cnt)); val = Vector{Int32}(undef, off[end] - 1); nxt = off[1:(end - 1)]
+    off = cumsum(vcat(1, cnt))
+    val = Vector{Int32}(undef, off[end] - 1)
+    nxt = off[1:(end - 1)]
     for s in 1:n
-        val[nxt[t.from[s]]] = s; nxt[t.from[s]] += 1
-        val[nxt[t.to[s]]] = s; nxt[t.to[s]] += 1
+        val[nxt[t.from[s]]] = s
+        nxt[t.from[s]] += 1
+        val[nxt[t.to[s]]] = s
+        nxt[t.to[s]] += 1
     end
     p2s = Ragged(off, val)
     parent = _ragged(
-        n, (s, f) -> for x in p2s[t.from[s]]
+        n,
+        (s, f) -> for x in p2s[t.from[s]]
             (x != s && (siblings || t.to[x] == t.from[s])) && f(x)
-        end
+        end,
     )
     children = _ragged(
-        n, (s, f) -> for x in p2s[t.to[s]]
+        n,
+        (s, f) -> for x in p2s[t.to[s]]
             x != s && f(x)
-        end
+        end,
     )
     return (parent = parent, children = children)
 end

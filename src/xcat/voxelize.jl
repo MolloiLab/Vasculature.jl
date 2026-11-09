@@ -18,7 +18,11 @@ struct VoxelGrid
     dims::NTuple{3, Int}
 end
 
-center(g::VoxelGrid, i, j, k) = (g.origin[1] + g.h * (i - 1), g.origin[2] + g.h * (j - 1), g.origin[3] + g.h * (k - 1))
+center(g::VoxelGrid, i, j, k) = (
+    g.origin[1] + g.h * (i - 1),
+    g.origin[2] + g.h * (j - 1),
+    g.origin[3] + g.h * (k - 1),
+)
 
 """
     grid_around(points, h; margin = 0) -> VoxelGrid
@@ -44,12 +48,16 @@ function voxelize(X::AbstractMatrix, T::AbstractMatrix{<:Integer}, g::VoxelGrid)
     ncol = nx * ny
     cnt = zeros(Int32, ncol + 1)
     rng = Vector{NTuple{4, Int}}(undef, size(T, 2))
-    for t in 1:size(T, 2)
+    for t in axes(T, 2)
         a, b, c = T[1, t], T[2, t], T[3, t]
-        x0 = min(X[1, a], X[1, b], X[1, c]); x1 = max(X[1, a], X[1, b], X[1, c])
-        y0 = min(X[2, a], X[2, b], X[2, c]); y1 = max(X[2, a], X[2, b], X[2, c])
-        i0 = max(1, ceil(Int, (x0 - g.origin[1]) / g.h) + 1); i1 = min(nx, floor(Int, (x1 - g.origin[1]) / g.h) + 1)
-        j0 = max(1, ceil(Int, (y0 - g.origin[2]) / g.h) + 1); j1 = min(ny, floor(Int, (y1 - g.origin[2]) / g.h) + 1)
+        x0 = min(X[1, a], X[1, b], X[1, c])
+        x1 = max(X[1, a], X[1, b], X[1, c])
+        y0 = min(X[2, a], X[2, b], X[2, c])
+        y1 = max(X[2, a], X[2, b], X[2, c])
+        i0 = max(1, ceil(Int, (x0 - g.origin[1]) / g.h) + 1)
+        i1 = min(nx, floor(Int, (x1 - g.origin[1]) / g.h) + 1)
+        j0 = max(1, ceil(Int, (y0 - g.origin[2]) / g.h) + 1)
+        j1 = min(ny, floor(Int, (y1 - g.origin[2]) / g.h) + 1)
         rng[t] = (i0, i1, j0, j1)
         for j in j0:j1, i in i0:i1
             cnt[i + nx * (j - 1) + 1] += 1
@@ -59,20 +67,27 @@ function voxelize(X::AbstractMatrix, T::AbstractMatrix{<:Integer}, g::VoxelGrid)
     for c in 1:ncol
         cnt[c + 1] += cnt[c]
     end
-    fill_ = copy(cnt); items = Vector{Int32}(undef, cnt[end] - 1)
+    fill_ = copy(cnt)
+    items = Vector{Int32}(undef, cnt[end] - 1)
     for t in 1:size(T, 2)
         i0, i1, j0, j1 = rng[t]
         for j in j0:j1, i in i0:i1
             c = i + nx * (j - 1)
-            items[fill_[c]] = t; fill_[c] += 1
+            items[fill_[c]] = t
+            fill_[c] += 1
         end
     end
-    inside = zeros(Bool, g.dims)   # Bool, not BitArray: columns share BitArray chunks across threads
+    inside = zeros(
+        Bool,
+        g.dims,
+    ) # Bool, not BitArray: columns share BitArray chunks across threads
     cols = collect(1:ncol)
     AK.foreachindex(cols; min_elems = 256) do c
-        lo = cnt[c]; hi = cnt[c + 1] - 1
+        lo = cnt[c]
+        hi = cnt[c + 1] - 1
         lo > hi && return
-        i = mod1(c, nx); j = cld(c, nx)
+        i = mod1(c, nx)
+        j = cld(c, nx)
         # fixed irrational nudge avoids rays through vertices and edges
         px = g.origin[1] + g.h * (i - 1) + 1.0e-7 * g.h * 0.7548776662466927
         py = g.origin[2] + g.h * (j - 1) + 1.0e-7 * g.h * 0.5698402909980532
@@ -100,7 +115,9 @@ end
     x1, y1 = X[1, a] - px, X[2, a] - py
     x2, y2 = X[1, b] - px, X[2, b] - py
     x3, y3 = X[1, c] - px, X[2, c] - py
-    d1 = x1 * y2 - x2 * y1; d2 = x2 * y3 - x3 * y2; d3 = x3 * y1 - x1 * y3
+    d1 = x1 * y2 - x2 * y1
+    d2 = x2 * y3 - x3 * y2
+    d3 = x3 * y1 - x1 * y3
     ((d1 >= 0 && d2 >= 0 && d3 >= 0) || (d1 <= 0 && d2 <= 0 && d3 <= 0)) || return nothing
     s = d1 + d2 + d3
     s == 0 && return nothing

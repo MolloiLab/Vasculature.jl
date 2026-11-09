@@ -39,7 +39,8 @@ function tree_qc(E::Engine{T}; rmin::Real = 0.25, hops::Integer = 2) where {T}
     # steps or while the path is shorter than r_j + twice the largest checked radius
     function near(j)
         seen = Dict{Int32, Tuple{Int, T, T}}(Int32(j) => (0, zero(T), zero(T)))
-        front = [Int32(j)]; h = 0
+        front = [Int32(j)]
+        h = 0
         while !isempty(front)
             h += 1
             nxt = Int32[]
@@ -49,7 +50,8 @@ function tree_qc(E::Engine{T}; rmin::Real = 0.25, hops::Integer = 2) where {T}
                 (h > hops && ci > m.radius[j] + 2 * rbig) && continue
                 for k in neighbours(i)
                     (m.radius[k] >= rmin && !haskey(seen, k)) || continue
-                    seen[k] = (h, ci, ri); push!(nxt, k)
+                    seen[k] = (h, ci, ri)
+                    push!(nxt, k)
                 end
             end
             front = nxt
@@ -63,9 +65,12 @@ function tree_qc(E::Engine{T}; rmin::Real = 0.25, hops::Integer = 2) where {T}
         # tubes meeting at a junction fill a ball as wide as the widest vessel there
         return x[1] <= hops || x[2] < m.radius[a] + m.radius[b] + x[3]
     end
-    noverlap = 0; worst_overlap = 0.0; worst_pair = (Int32(0), Int32(0))
-    for x in 1:length(big), y in (x + 1):length(big)
-        a = big[x]; b = big[y]
+    noverlap = 0
+    worst_overlap = 0.0
+    worst_pair = (Int32(0), Int32(0))
+    for x in eachindex(big), y in (x + 1):length(big)
+        a = big[x]
+        b = big[y]
         adjacent(a, b) && continue
         d = seg2seg_distance(segA(m, a), segB(m, a), segA(m, b), segB(m, b))
         pen = Float64(m.radius[a] + m.radius[b] - d)
@@ -79,8 +84,10 @@ function tree_qc(E::Engine{T}; rmin::Real = 0.25, hops::Integer = 2) where {T}
     for j in big
         p = m.parent[j]
         (p <= 2 || m.radius[p] < rmin) && continue
-        u = sub3(m.pos[p], m.pos[m.parent[p]]); v = sub3(m.pos[j], m.pos[p])
-        nu = norm3(u); nv = norm3(v)
+        u = sub3(m.pos[p], m.pos[m.parent[p]])
+        v = sub3(m.pos[j], m.pos[p])
+        nu = norm3(u)
+        nv = norm3(v)
         (nu == 0 || nv == 0) && continue
         ang = acosd(clamp(Float64(dot3(u, v) / (nu * nv)), -1.0, 1.0))
         b = E.isbase[j] ? :base : :grown
@@ -89,9 +96,14 @@ function tree_qc(E::Engine{T}; rmin::Real = 0.25, hops::Integer = 2) where {T}
         worst_turn = max(worst_turn, ang)
     end
     return (
-        vessels = length(big), overlaps = noverlap, worst_overlap_mm = worst_overlap, worst_pair,
-        base_turns_90 = turns[:base90], base_turns_135 = turns[:base135],
-        grown_turns_90 = turns[:grown90], grown_turns_135 = turns[:grown135],
+        vessels = length(big),
+        overlaps = noverlap,
+        worst_overlap_mm = worst_overlap,
+        worst_pair,
+        base_turns_90 = turns[:base90],
+        base_turns_135 = turns[:base135],
+        grown_turns_90 = turns[:grown90],
+        grown_turns_135 = turns[:grown135],
         worst_turn_deg = worst_turn,
     )
 end

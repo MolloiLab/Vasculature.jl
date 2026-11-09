@@ -6,8 +6,8 @@
 # notebook without an entry still gets a tile built from its slug.
 
 let BASE = get(ENV, "VASCULATURE_BASE", ""),
-        notebooks_dir = joinpath(@__DIR__, "..", "..", "..", "notebooks"),
-        NOTEBOOK_META = Dict(
+    notebooks_dir = joinpath(@__DIR__, "..", "..", "..", "notebooks"),
+    NOTEBOOK_META = Dict(
         "00_cardiac_pipeline" => (
             index = "00",
             title = "Cardiac Pipeline",
@@ -30,30 +30,34 @@ let BASE = get(ENV, "VASCULATURE_BASE", ""),
             tags = ["Leg", "XCAT", "Growth"],
         ),
     )
-
     # Tile builder — defined inside the `let` so Therapy's file-based router
     # doesn't try to register it as a route.
     notebook_tile = function (slug::AbstractString, k::Integer)
         meta = get(
-            NOTEBOOK_META, slug, (
+            NOTEBOOK_META,
+            slug,
+            (
                 index = first(split(slug, "_")),
                 title = replace(slug, "_" => " "),
                 summary = "",
                 thumbnail = nothing,
                 tags = String[],
-            )
+            ),
         )
 
         return A(
             :href => "$(BASE)/examples/$(slug)/",
-            :class => "tv-tile tv-enter", :style => "animation-delay:$(80 * (k - 1))ms",
+            :class => "tv-tile tv-enter",
+            :style => "animation-delay:$(80 * (k - 1))ms",
             if meta.thumbnail !== nothing
                 Div(
-                    :class => "tv-tile-media aspect-[16/9] flex items-center justify-center p-4",
+                    :class =>
+                        "tv-tile-media aspect-[16/9] flex items-center justify-center p-4",
                     Img(
-                        :src => "$(BASE)/assets/$(meta.thumbnail)", :alt => meta.title,
-                        :class => "max-w-full max-h-full object-contain rounded-xl"
-                    )
+                        :src => "$(BASE)/assets/$(meta.thumbnail)",
+                        :alt => meta.title,
+                        :class => "max-w-full max-h-full object-contain rounded-xl",
+                    ),
                 )
             else
                 Div(:class => "aspect-[16/9]", :style => "background:var(--surface-2)")
@@ -63,15 +67,18 @@ let BASE = get(ENV, "VASCULATURE_BASE", ""),
                 Div(
                     :class => "flex items-baseline gap-3",
                     Span(:class => "text-sm font-medium tv-accent", meta.index),
-                    H3(:class => "tv-title text-2xl", meta.title)
+                    H3(:class => "tv-title text-2xl", meta.title),
                 ),
                 P(:class => "tv-body text-[15px]", meta.summary),
                 Div(
                     :class => "flex flex-wrap items-center gap-2 pt-1",
-                    [Span(:class => "tv-pill tv-pill-sm pointer-events-none", tag) for tag in meta.tags]...
+                    [
+                        Span(:class => "tv-pill tv-pill-sm pointer-events-none", tag)
+                        for tag in meta.tags
+                    ]...,
                 ),
-                Div(:class => "tv-tile-more pt-2 text-sm font-medium", "Open Notebook →")
-            )
+                Div(:class => "tv-tile-more pt-2 text-sm font-medium", "Open Notebook →"),
+            ),
         )
     end
 
@@ -79,16 +86,28 @@ let BASE = get(ENV, "VASCULATURE_BASE", ""),
         # Discover slugs at render time so a fresh notebook drop shows up
         # without code changes here. Like app.jl, leave out notebooks that are
         # skipped or not rendered yet, so no tile points at a missing page.
-        skip = Set(strip.(split(get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""), ","; keepempty = false)))
-        rendered(s) = isfile(joinpath(notebooks_dir, "..", "notebooks-static", "$(s).fragment.html"))
+        skip = Set(
+            strip.(split(
+                get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""),
+                ",";
+                keepempty = false,
+            )),
+        )
+        rendered(s) = isfile(joinpath(
+            notebooks_dir,
+            "..",
+            "notebooks-static",
+            "$(s).fragment.html",
+        ))
         slugs = isdir(notebooks_dir) ?
-            sort(
-                [
-                    splitext(f)[1] for f in readdir(notebooks_dir)
-                    if endswith(f, ".jl") && !endswith(f, ".sessions.toml") && !(splitext(f)[1] in skip) &&
+            sort([
+                splitext(f)[1]
+                for f in readdir(notebooks_dir)
+                if endswith(f, ".jl") &&
+                    !endswith(f, ".sessions.toml") &&
+                    !(splitext(f)[1] in skip) &&
                     rendered(splitext(f)[1])
-                ]
-            ) :
+            ]) :
             String[]
 
         Div(
@@ -99,8 +118,8 @@ let BASE = get(ENV, "VASCULATURE_BASE", ""),
                 P(
                     :class => "tv-body text-lg",
                     "Worked examples of the Vasculature.jl pipeline. Each one is a Pluto notebook, shown with its ",
-                    "code, text and figures in place."
-                )
+                    "code, text and figures in place.",
+                ),
             ),
             if isempty(slugs)
                 Div(
@@ -109,15 +128,15 @@ let BASE = get(ENV, "VASCULATURE_BASE", ""),
                         :class => "tv-body",
                         "No rendered notebooks yet. Add a .jl file to ",
                         Code(:class => "tv-code", "docs/notebooks/"),
-                        " and rebuild."
-                    )
+                        " and rebuild.",
+                    ),
                 )
             else
                 Div(
                     :class => "grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6",
-                    [notebook_tile(slug, k) for (k, slug) in enumerate(slugs)]...
+                    [notebook_tile(slug, k) for (k, slug) in enumerate(slugs)]...,
                 )
-            end
+            end,
         )
     end
 end

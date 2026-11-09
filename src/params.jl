@@ -66,8 +66,8 @@ Base.@kwdef struct CCOParams
     min_distance_to_border::Float64 = 5.0
     extension_mode::Bool = false
     upstream_attach::Bool = false
-    max_connection::Float32 = 25.0f0     # mm; see below
-    size_scale::Float32 = 1.0f0          # organ length scale vs the reference heart; see below
+    max_connection::Float32 = 25.0f0 # mm; see below
+    size_scale::Float32 = 1.0f0      # organ length scale vs the reference heart; see below
     num_neighbors::Int = 20
     nb_max_search::Int = 100
     nb_try_candidate::Int = 100
@@ -94,17 +94,21 @@ function _symmetry_knots(::Type{T}, sf) where {T}
     n = min(length(sf), 12)
     length(sf) > 12 && error("symmetry_floor: at most 12 knots")
     issorted(first.(sf)) || error("symmetry_floor: diameters must increase")
-    return n, ntuple(i -> i <= n ? T(log(sf[i][1])) : zero(T), 12), ntuple(i -> i <= n ? T(sf[i][2]) : zero(T), 12)
+    return n,
+        ntuple(i -> i <= n ? T(log(sf[i][1])) : zero(T), 12),
+        ntuple(i -> i <= n ? T(sf[i][2]) : zero(T), 12)
 end
 function symmetry_min(p::CCOParams, d::T) where {T}
-    sf = p.symmetry_floor; n = length(sf)
+    sf = p.symmetry_floor
+    n = length(sf)
     n == 0 && return zero(T)
     x = log(Float64(d))
     x <= log(sf[1][1]) && return T(sf[1][2])
     @inbounds for k in 2:n
         x1 = log(sf[k][1])
         if x <= x1
-            x0 = log(sf[k - 1][1]); w = (x - x0) / (x1 - x0)
+            x0 = log(sf[k - 1][1])
+            w = (x - x0) / (x1 - x0)
             return T(sf[k - 1][2] + w * (sf[k][2] - sf[k - 1][2]))
         end
     end
@@ -112,6 +116,6 @@ function symmetry_min(p::CCOParams, d::T) where {T}
 end
 
 # Physiological constants hard-coded in HctccoModel.h.
-const MU = 3.6e-3      # my_mu, blood viscosity
-const QPERF = 8.33e3   # my_qPerf
-const PPERF = 1.33e4   # my_pPerf
+const MU = 3.6e-3    # my_mu, blood viscosity
+const QPERF = 8.33e3 # my_qPerf
+const PPERF = 1.33e4 # my_pPerf

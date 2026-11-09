@@ -14,30 +14,54 @@ mutable struct SegGrid{T}
     head::Vector{Int32}
     next::Vector{Int32}
     item::Vector{Int32}
-    box::Vector{NTuple{6, Int16}}   # per segment: cell index range it is registered in (Int16: 12 bytes per segment)
+    box::Vector{NTuple{
+        6,
+        Int16,
+    }} # per segment: cell index range it is registered in (Int16: 12 bytes per segment)
     margin::T
-    cellr::Vector{T}                 # per cell: largest reference radius among its segments
-    rref::Vector{T}                  # per segment: radius when its cells' bounds were last set
-    growth::T                        # max over segments of current radius / rref (≥ 1)
-    prune::Bool                      # skip cells whose radius bound cannot reach a query
+    cellr::Vector{T} # per cell: largest reference radius among its segments
+    rref::Vector{T}  # per segment: radius when its cells' bounds were last set
+    growth::T        # max over segments of current radius / rref (≥ 1)
+    prune::Bool      # skip cells whose radius bound cannot reach a query
 end
 
 function SegGrid{T}(lower::P3{T}, upper::P3{T}, h::Real) where {T}
     pad = T(4h)
     origin = (lower[1] - pad, lower[2] - pad, lower[3] - pad)
     dims = ntuple(i -> Int(cld(upper[i] - lower[i] + 2pad, T(h))) + 1, 3)
-    maximum(dims) <= typemax(Int16) || throw(ArgumentError("grid of $(dims) cells: at most $(typemax(Int16)) per axis"))
-    return SegGrid{T}(origin, T(h), dims, zeros(Int32, prod(dims)), Int32[], Int32[], NTuple{6, Int16}[], T(1.0e-3), zeros(T, prod(dims)), T[], one(T), false)
+    maximum(dims) <= typemax(Int16) ||
+        throw(ArgumentError("grid of $(dims) cells: at most $(typemax(Int16)) per axis"))
+    return SegGrid{T}(
+        origin,
+        T(h),
+        dims,
+        zeros(Int32, prod(dims)),
+        Int32[],
+        Int32[],
+        NTuple{6, Int16}[],
+        T(1.0e-3),
+        zeros(T, prod(dims)),
+        T[],
+        one(T),
+        false,
+    )
 end
 
-@inline _cell(g, x, i) = clamp(unsafe_trunc(Int, floor((x - g.origin[i]) / g.h)) + 1, 1, g.dims[i])
+@inline _cell(g, x, i) = clamp(
+    unsafe_trunc(Int, floor((x - g.origin[i]) / g.h)) + 1,
+    1,
+    g.dims[i],
+)
 @inline _lin(g, i, j, k) = i + (j - 1) * g.dims[1] + (k - 1) * g.dims[1] * g.dims[2]
 
 @inline function _cellbox(g, a::P3, b::P3, pad)
     return (
-        Int32(_cell(g, min(a[1], b[1]) - pad, 1)), Int32(_cell(g, max(a[1], b[1]) + pad, 1)),
-        Int32(_cell(g, min(a[2], b[2]) - pad, 2)), Int32(_cell(g, max(a[2], b[2]) + pad, 2)),
-        Int32(_cell(g, min(a[3], b[3]) - pad, 3)), Int32(_cell(g, max(a[3], b[3]) + pad, 3)),
+        Int32(_cell(g, min(a[1], b[1]) - pad, 1)),
+        Int32(_cell(g, max(a[1], b[1]) + pad, 1)),
+        Int32(_cell(g, min(a[2], b[2]) - pad, 2)),
+        Int32(_cell(g, max(a[2], b[2]) + pad, 2)),
+        Int32(_cell(g, min(a[3], b[3]) - pad, 3)),
+        Int32(_cell(g, max(a[3], b[3]) + pad, 3)),
     )
 end
 
@@ -50,7 +74,9 @@ function grid_insert!(g::SegGrid, m::CCOModel, j)
     g.rref[j] = r
     for k in bx[5]:bx[6], jj in bx[3]:bx[4], i in bx[1]:bx[2]
         c = _lin(g, i, jj, k)
-        push!(g.item, Int32(j)); push!(g.next, g.head[c]); g.head[c] = Int32(length(g.item))
+        push!(g.item, Int32(j))
+        push!(g.next, g.head[c])
+        g.head[c] = Int32(length(g.item))
         r > g.cellr[c] && (g.cellr[c] = r)
     end
     return
@@ -69,7 +95,9 @@ function grid_remove!(g::SegGrid, j)
 end
 
 function grid_build!(g::SegGrid, m::CCOModel)
-    fill!(g.head, 0); empty!(g.next); empty!(g.item)
+    fill!(g.head, 0)
+    empty!(g.next)
+    empty!(g.item)
     resize!(g.box, nsegments(m))
     for j in 2:nsegments(m)
         grid_insert!(g, m, j)
@@ -81,7 +109,8 @@ end
 # cell bounds scaled by `growth` stay valid. Recompute the bounds (and reset the references)
 # only when `growth` exceeds `tol`, since that costs a pass over every cell.
 function grid_refresh_radii!(g::SegGrid{T}, m::CCOModel{T}; tol = 1.25) where {T}
-    rad = m.radius; rref = g.rref
+    rad = m.radius
+    rref = g.rref
     resize!(rref, nsegments(m))
     n = nsegments(m)
     nch = max(1, min(4 * Threads.nthreads(), n ÷ 32768))
@@ -123,22 +152,28 @@ function grid_compact!(g::SegGrid)
         end
         @inbounds cnt[c] = k
     end
-    first = Vector{Int32}(undef, nc); acc = Int32(0)
+    first = Vector{Int32}(undef, nc)
+    acc = Int32(0)
     for c in 1:nc
-        @inbounds first[c] = acc + Int32(1); acc += cnt[c]
+        @inbounds first[c] = acc + Int32(1)
+        acc += cnt[c]
     end
-    item = Vector{Int32}(undef, acc); next = Vector{Int32}(undef, acc)
+    item = Vector{Int32}(undef, acc)
+    next = Vector{Int32}(undef, acc)
     AK.foreachindex(cnt; max_tasks = Threads.nthreads(), min_elems = 4096) do c
         e = first[c]
         for j in cell_items(g, c)
-            @inbounds item[e] = j; @inbounds next[e] = e + Int32(1); e += Int32(1)
+            @inbounds item[e] = j
+            @inbounds next[e] = e + Int32(1)
+            e += Int32(1)
         end
         @inbounds cnt[c] > 0 && (next[e - Int32(1)] = Int32(0))
     end
     AK.foreachindex(cnt; max_tasks = Threads.nthreads(), min_elems = 4096) do c
         @inbounds g.head[c] = cnt[c] > 0 ? first[c] : Int32(0)
     end
-    g.item = item; g.next = next
+    g.item = item
+    g.next = next
     return g
 end
 
@@ -152,7 +187,8 @@ Base.IteratorSize(::Type{<:CellItems}) = Base.SizeUnknown()
 Base.eltype(::Type{<:CellItems}) = Int32
 @inline function Base.iterate(it::CellItems, e::Int32 = it.first)
     @inbounds while e != 0
-        j = it.item[e]; e2 = it.next[e]
+        j = it.item[e]
+        e2 = it.next[e]
         j != 0 && return (j, e2)
         e = e2
     end
@@ -168,15 +204,19 @@ end
     bx = _cellbox(g, a, b, pad + g.margin)
     lo = (min(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
     hi = (max(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
-    h = g.h; o = g.origin
+    h = g.h
+    o = g.origin
     @inbounds for k in bx[5]:bx[6], jj in bx[3]:bx[4], i in bx[1]:bx[2]
         c = _lin(g, i, jj, k)
         if g.prune
-            cx = o[1] + (i - 1) * h; cy = o[2] + (jj - 1) * h; cz = o[3] + (k - 1) * h
+            cx = o[1] + (i - 1) * h
+            cy = o[2] + (jj - 1) * h
+            cz = o[3] + (k - 1) * h
             gx = max(zero(T), lo[1] - (cx + h), cx - hi[1])
             gy = max(zero(T), lo[2] - (cy + h), cy - hi[2])
             gz = max(zero(T), lo[3] - (cz + h), cz - hi[3])
-            gx * gx + gy * gy + gz * gz > (need(g.cellr[c] * g.growth) + g.margin)^2 && continue
+            gx * gx + gy * gy + gz * gz >
+                (need(g.cellr[c] * g.growth) + g.margin)^2 && continue
         end
         for j in cell_items(g, c)
             f(j) && return true

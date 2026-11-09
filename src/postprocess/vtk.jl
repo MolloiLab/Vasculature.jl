@@ -6,7 +6,14 @@
 using Base64: base64encode
 
 # One inline binary DataArray: base64 of a UInt32 byte count followed by the little-endian data.
-function _vtk_array(io::IO, type, name, data::Vector{T}; ncomp::Int = 1, indent = "        ") where {T}
+function _vtk_array(
+    io::IO,
+    type,
+    name,
+    data::Vector{T};
+    ncomp::Int = 1,
+    indent = "        ",
+) where {T}
     buf = IOBuffer()
     write(buf, htol(UInt32(sizeof(data))))
     for v in data
@@ -34,11 +41,18 @@ function write_tree_vtp(path::AbstractString, t::PPTree, orders::Vector{Int})
     offs = Int64[2s for s in 1:n]
     open(path, "w") do io
         println(io, "<?xml version=\"1.0\"?>")
-        println(io, "<VTKFile type=\"PolyData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">")
+        println(
+            io,
+            "<VTKFile type=\"PolyData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">",
+        )
         println(io, "  <PolyData>")
         println(
-            io, "    <Piece NumberOfPoints=\"", length(t.points), "\" NumberOfVerts=\"0\" NumberOfLines=\"", n,
-            "\" NumberOfStrips=\"0\" NumberOfPolys=\"0\">"
+            io,
+            "    <Piece NumberOfPoints=\"",
+            length(t.points),
+            "\" NumberOfVerts=\"0\" NumberOfLines=\"",
+            n,
+            "\" NumberOfStrips=\"0\" NumberOfPolys=\"0\">",
         )
         println(io, "      <PointData>\n      </PointData>")
         println(io, "      <CellData Scalars=\"final_order\">")
@@ -64,12 +78,20 @@ function _vnormalize(v::NTuple{3, Float64})
     d = sqrt(v[1] * v[1] + v[2] * v[2] + v[3] * v[3])
     return d == 0.0 ? (v, d) : ((v[1] / d, v[2] / d, v[3] / d), d)
 end
-_vcross(a, b) = (a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1])
+_vcross(a, b) = (
+    a[2] * b[3] - a[3] * b[2],
+    a[3] * b[1] - a[1] * b[3],
+    a[1] * b[2] - a[2] * b[1],
+)
 # VTK calls the platform libm's cos/sin (cf. `cpow`); Julia's own differ in the last bit for
 # a few of the tube angles.
 _ccos(x::Float64) = ccall(:cos, Float64, (Float64,), x)
 _csin(x::Float64) = ccall(:sin, Float64, (Float64,), x)
-_f32(v::NTuple{3, Float64}) = (Float64(Float32(v[1])), Float64(Float32(v[2])), Float64(Float32(v[3])))
+_f32(v::NTuple{3, Float64}) = (
+    Float64(Float32(v[1])),
+    Float64(Float32(v[2])),
+    Float64(Float32(v[3])),
+)
 
 # vtkPolyLine::GenerateSlidingNormals for a two-point line: a vector orthogonal to the
 # segment built from its first non-zero component, normalized and stored as Float32.
@@ -114,7 +136,7 @@ function write_tree_obj(path::AbstractString, t::PPTree; sides::Int = 24)
         p0, p1 = _f32(t.points[ids[1]]), _f32(t.points[ids[2]])
         d = (p1[1] - p0[1], p1[2] - p0[2], p1[3] - p0[3])
         unit, len = _vnormalize(d)
-        len == 0.0 && continue          # vtkTubeFilter skips lines with coincident points
+        len == 0.0 && continue # vtkTubeFilter skips lines with coincident points
         nrm = _sliding_normal(unit)
         offset = length(pts)
         startcap = _vnormalize((-d[1], -d[2], -d[3]))[1]
@@ -125,13 +147,28 @@ function write_tree_obj(path::AbstractString, t::PPTree; sides::Int = 24)
             # the first point, and the normalized and the renormalized direction at the second.
             sprev, snext = j == 1 ? (d, unit) : (unit, endcap)
             p = j == 1 ? p0 : p1
-            sv = _vnormalize(((sprev[1] + snext[1]) / 2.0, (sprev[2] + snext[2]) / 2.0, (sprev[3] + snext[3]) / 2.0))[1]
+            sv = _vnormalize((
+                (sprev[1] + snext[1]) / 2.0,
+                (sprev[2] + snext[2]) / 2.0,
+                (sprev[3] + snext[3]) / 2.0,
+            ))[1]
             w = _vnormalize(_vcross(sv, nrm))[1]
             np_ = _vnormalize(_vcross(w, sv))[1]
             r = prad[ids[j]]
             for k in 1:sides
-                nk = (w[1] * cs[k] + np_[1] * sn[k], w[2] * cs[k] + np_[2] * sn[k], w[3] * cs[k] + np_[3] * sn[k])
-                push!(pts, Float32.((p[1] + 1.0 * r * nk[1], p[2] + 1.0 * r * nk[2], p[3] + 1.0 * r * nk[3])))
+                nk = (
+                    w[1] * cs[k] + np_[1] * sn[k],
+                    w[2] * cs[k] + np_[2] * sn[k],
+                    w[3] * cs[k] + np_[3] * sn[k],
+                )
+                push!(
+                    pts,
+                    Float32.((
+                        p[1] + 1.0 * r * nk[1],
+                        p[2] + 1.0 * r * nk[2],
+                        p[3] + 1.0 * r * nk[3],
+                    )),
+                )
                 push!(nrms, Float32.(nk))
             end
         end
@@ -142,16 +179,21 @@ function write_tree_obj(path::AbstractString, t::PPTree; sides::Int = 24)
         # vtkTubeFilter::GenerateStrips (0-based point ids, offset by this tube's first point)
         for k in 0:(sides - 1)
             i1, i2 = k, (k + 1) % sides
-            push!(strips, [offset + i2, offset + i1, offset + sides + i2, offset + sides + i1])
+            push!(
+                strips,
+                [offset + i2, offset + i1, offset + sides + i2, offset + sides + i1],
+            )
         end
         start = offset + 2 * sides
         cap = [start, start + 1]
         i1, i2 = sides - 1, 2
         for k in 0:(sides - 3)
             if isodd(k)
-                push!(cap, start + i2); i2 += 1
+                push!(cap, start + i2)
+                i2 += 1
             else
-                push!(cap, start + i1); i1 -= 1
+                push!(cap, start + i1)
+                i1 -= 1
             end
         end
         push!(strips, cap)
@@ -160,9 +202,11 @@ function write_tree_obj(path::AbstractString, t::PPTree; sides::Int = 24)
         i1, i2 = sides - 2, 1
         for k in 0:(sides - 3)
             if isodd(k)
-                push!(cap, start + i1); i1 -= 1
+                push!(cap, start + i1)
+                i1 -= 1
             else
-                push!(cap, start + i2); i2 += 1
+                push!(cap, start + i2)
+                i2 += 1
             end
         end
         push!(strips, cap)
@@ -184,7 +228,11 @@ function write_tree_obj(path::AbstractString, t::PPTree; sides::Int = 24)
         # vtkOBJWriter splits each strip into triangles, flipping every other one.
         for st in strips, i in 3:length(st)
             append!(buf, codeunits("f"))
-            for v in (iseven(i) ? (st[i - 1], st[i - 2], st[i]) : (st[i - 2], st[i - 1], st[i]))
+            for v in (
+                    iseven(i) ?
+                        (st[i - 1], st[i - 2], st[i]) :
+                        (st[i - 2], st[i - 1], st[i])
+                )
                 push!(buf, UInt8(' '))
                 _put_int!(buf, v + 1)
                 push!(buf, UInt8('/'), UInt8('/'))

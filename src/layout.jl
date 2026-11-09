@@ -9,23 +9,33 @@
 # recursions have no cross-node dependencies other than parent/child.
 
 mutable struct Layout{T}
-    pre::Vector{Int32}    # position -> node
-    ppos::Vector{Int32}   # node -> position (0 for the root special segment)
-    sz::Vector{Int32}     # node -> subtree size
-    par::Vector{Int32}    # position -> parent position (0 at the top)
-    lc::Vector{Int32}     # position -> left child position (0 if none)
-    rc::Vector{Int32}     # position -> right child position (0 if none)
-    bin::Vector{Bool}     # position -> parent is a true bifurcation (radius uses beta)
-    beta::Vector{T}       # position -> beta (base tree)
-    len::Vector{T}        # position -> segment length * length factor (base tree)
-    flow::Vector{T}       # position -> flow (scratch for the full update)
-    res::Vector{T}        # position -> resistance (scratch for the full update)
-    cum::Vector{T}        # position -> cumulative beta (scratch for the full update)
+    pre::Vector{Int32}  # position -> node
+    ppos::Vector{Int32} # node -> position (0 for the root special segment)
+    sz::Vector{Int32}   # node -> subtree size
+    par::Vector{Int32}  # position -> parent position (0 at the top)
+    lc::Vector{Int32}   # position -> left child position (0 if none)
+    rc::Vector{Int32}   # position -> right child position (0 if none)
+    bin::Vector{Bool}   # position -> parent is a true bifurcation (radius uses beta)
+    beta::Vector{T}     # position -> beta (base tree)
+    len::Vector{T}      # position -> segment length * length factor (base tree)
+    flow::Vector{T}     # position -> flow (scratch for the full update)
+    res::Vector{T}      # position -> resistance (scratch for the full update)
+    cum::Vector{T}      # position -> cumulative beta (scratch for the full update)
 end
 
 Layout{T}() where {T} = Layout{T}(
-    Int32[], Int32[], Int32[], Int32[], Int32[], Int32[], Bool[],
-    T[], T[], T[], T[], T[]
+    Int32[],
+    Int32[],
+    Int32[],
+    Int32[],
+    Int32[],
+    Int32[],
+    Bool[],
+    T[],
+    T[],
+    T[],
+    T[],
+    T[],
 )
 
 # Build `pre` and `sz` from scratch (once, after import).
@@ -34,14 +44,16 @@ function init_layout!(L::Layout, m::CCOModel)
     empty!(L.pre)
     stack = Int32[2]
     while !isempty(stack)
-        i = pop!(stack); push!(L.pre, i)
+        i = pop!(stack)
+        push!(L.pre, i)
         m.right[i] != 0 && push!(stack, m.right[i])
         m.left[i] != 0 && push!(stack, m.left[i])
     end
     length(L.pre) == n - 1 || error("tree is not connected below upstream segment 1")
     L.sz = ones(Int32, n)
     for k in length(L.pre):-1:1
-        i = L.pre[k]; p = m.parent[i]
+        i = L.pre[k]
+        p = m.parent[i]
         k > 1 && (L.sz[p] += L.sz[i])
     end
     refresh_layout!(L, m)
@@ -52,36 +64,48 @@ end
 # layout in place. Old positions after s's slot shift by one (inside s's old subtree, now
 # under nl) or two (after it); nl goes right after s and nr right after nl's subtree.
 function splice_layout!(L::Layout{T}, m::CCOModel, s, nl, nr) where {T}
-    k = Int32(L.ppos[s]); old = L.sz[s]
+    k = Int32(L.ppos[s])
+    old = L.sz[s]
     lim = k + old - Int32(1)
     @inline sh(q) = q <= k ? q : (q <= lim ? q + Int32(1) : q + Int32(2))
-    olc = L.lc[k]; orc = L.rc[k]
+    olc = L.lc[k]
+    orc = L.rc[k]
     insert!(L.pre, k + 1, nl)
     insert!(L.pre, k + old + 1, nr)
-    push!(L.sz, old, 1)       # sz[nl] = old size of s's subtree, sz[nr] = 1
+    push!(L.sz, old, 1) # sz[nl] = old size of s's subtree, sz[nr] = 1
     a = s
     while a != 1
         L.sz[a] += Int32(2)
         a = m.parent[a]
     end
     @inbounds for i in eachindex(L.ppos)
-        q = L.ppos[i]; q != 0 && (L.ppos[i] = sh(q))
+        q = L.ppos[i]
+        q != 0 && (L.ppos[i] = sh(q))
     end
     push!(L.ppos, k + Int32(1), k + old + Int32(1))
     @inbounds for v in (L.par, L.lc, L.rc)
         for j in eachindex(v)
-            q = v[j]; q != 0 && (v[j] = sh(q))
+            q = v[j]
+            q != 0 && (v[j] = sh(q))
         end
     end
-    nlc = olc == 0 ? Int32(0) : sh(olc); nrc = orc == 0 ? Int32(0) : sh(orc)
-    insert!(L.par, k + 1, k); insert!(L.lc, k + 1, nlc); insert!(L.rc, k + 1, nrc)
-    insert!(L.par, k + old + 1, k); insert!(L.lc, k + old + 1, 0); insert!(L.rc, k + old + 1, 0)
-    L.lc[k] = k + Int32(1); L.rc[k] = k + old + Int32(1)
+    nlc = olc == 0 ? Int32(0) : sh(olc)
+    nrc = orc == 0 ? Int32(0) : sh(orc)
+    insert!(L.par, k + 1, k)
+    insert!(L.lc, k + 1, nlc)
+    insert!(L.rc, k + 1, nrc)
+    insert!(L.par, k + old + 1, k)
+    insert!(L.lc, k + old + 1, 0)
+    insert!(L.rc, k + old + 1, 0)
+    L.lc[k] = k + Int32(1)
+    L.rc[k] = k + old + Int32(1)
     nlc != 0 && (L.par[nlc] = k + Int32(1))
     nrc != 0 && (L.par[nrc] = k + Int32(1))
-    insert!(L.bin, k + 1, true); insert!(L.bin, k + old + 1, true)
+    insert!(L.bin, k + 1, true)
+    insert!(L.bin, k + old + 1, true)
     for v in (L.beta, L.len, L.flow, L.res, L.cum)
-        insert!(v, k + 1, zero(T)); insert!(v, k + old + 1, zero(T))
+        insert!(v, k + 1, zero(T))
+        insert!(v, k + old + 1, zero(T))
     end
     return L
 end
@@ -89,7 +113,8 @@ end
 # Recompute every position-indexed array from `pre` and the node arrays.
 function refresh_layout!(L::Layout{T}, m::CCOModel{T}) where {T}
     n = length(L.pre)
-    resize!(L.ppos, nsegments(m)); fill!(L.ppos, 0)
+    resize!(L.ppos, nsegments(m))
+    fill!(L.ppos, 0)
     for k in 1:n
         L.ppos[L.pre[k]] = k
     end
@@ -116,17 +141,26 @@ end
 # Bottom-up resistance over the position range lo:hi (a set of whole subtrees, or the
 # upper part when the subtrees below have been done).
 @inline function _resistance_range!(L::Layout{T}, gamma::T, lo, hi) where {T}
-    len = L.len; lc = L.lc; rc = L.rc; beta = L.beta; res = L.res; flow = L.flow
+    len = L.len
+    lc = L.lc
+    rc = L.rc
+    beta = L.beta
+    res = L.res
+    flow = L.flow
     @inbounds for k in hi:-1:lo
         R = own_resistance(len[k])
-        a = lc[k]; b = rc[k]
+        a = lc[k]
+        b = rc[k]
         if a != 0 && b == 0
-            beta[a] = one(T); R += res[a]
+            beta[a] = one(T)
+            R += res[a]
         elseif b != 0 && a == 0
-            beta[b] = one(T); R += res[b]
+            beta[b] = one(T)
+            R += res[b]
         elseif a != 0 && b != 0
             bL, bR, inv = resistance_combine(gamma, flow[a], flow[b], res[a], res[b])
-            beta[a] = bL; beta[b] = bR
+            beta[a] = bL
+            beta[b] = bR
             R += inv
         end
         res[k] = R
@@ -144,7 +178,8 @@ parallel (they are independent), then the few nodes above them serially.
 function full_update!(m::CCOModel{T}, L::Layout{T}) where {T}
     update_length_factor!(m)
     n = length(L.pre)
-    pre = L.pre; lf = m.lf
+    pre = L.pre
+    lf = m.lf
     _gather!(L.len, m.glen, pre, lf)
     _gather!(L.flow, m.flow, pre)
     _gather!(L.beta, m.beta, pre)
@@ -154,7 +189,8 @@ function full_update!(m::CCOModel{T}, L::Layout{T}) where {T}
     k = 1
     while k <= n
         if L.sz[L.pre[k]] <= cap
-            push!(roots, k); k += L.sz[L.pre[k]]
+            push!(roots, k)
+            k += L.sz[L.pre[k]]
         else
             k += 1
         end

@@ -48,7 +48,7 @@ struct GridView{T, VI, VT, VB}
     head::VI
     next::VI
     item::VI
-    box::VB               # per segment: registered cell range (for de-duplication)
+    box::VB # per segment: registered cell range (for de-duplication)
 end
 Adapt.@adapt_structure GridView
 
@@ -69,13 +69,13 @@ Adapt.@adapt_structure DomainView
 struct ParamView{T}
     num_neighbors::Int
     upstream_attach::Bool
-    max_connection::T          # size-scaled (CCOParams.size_scale)
-    reach::T                   # TERRITORY_REACH, size-scaled
+    max_connection::T # size-scaled (CCOParams.size_scale)
+    reach::T          # TERRITORY_REACH, size-scaled
     kamiya_iters::Int
     kamiya_tol::T
     side_branch_bias::T
     term_flow_cv::T
-    sym_n::Int                 # symmetry floor knots (see CCOParams.symmetry_floor)
+    sym_n::Int # symmetry floor knots (see CCOParams.symmetry_floor)
     sym_ld::NTuple{12, T}
     sym_s::NTuple{12, T}
 end
@@ -95,17 +95,17 @@ struct TreeView{T, M, F, G, D, VI8, VB, VU8, VR, VT}
     lscale::T
     max_angle_cos::T
     rmax::T
-    big::VR                   # segments tested directly by every grid query (Engine.big; buffer may be longer)
+    big::VR # segments tested directly by every grid query (Engine.big; buffer may be longer)
     nbig::Int
     fix_base::Bool
     full::Bool
-    keepout::T            # vessel keep-out factor for new terminals (see distance_valid)
-    level::T              # connectivity restriction level of this round
-    roots::VR             # root segment of each tree
-    rcaps::VT             # root radius cap of each tree
-    rest::VT              # per tree: unscaled volume of the other trees
-    rmin::VT              # per tree: tightest cap ratio of the other trees
-    open::UInt16          # trees at or below their share of the flow now (Engine.open)
+    keepout::T   # vessel keep-out factor for new terminals (see distance_valid)
+    level::T     # connectivity restriction level of this round
+    roots::VR    # root segment of each tree
+    rcaps::VT    # root radius cap of each tree
+    rest::VT     # per tree: unscaled volume of the other trees
+    rmin::VT     # per tree: tightest cap ratio of the other trees
+    open::UInt16 # trees at or below their share of the flow now (Engine.open)
 end
 Adapt.@adapt_structure TreeView
 
@@ -145,9 +145,9 @@ end
 
 # Host-side buffers reused across rounds (for devices: the static domain and the tree's device arrays).
 mutable struct ViewCache
-    dom::Any               # (img, dist) already moved by `to`, keyed by the `to` function
+    dom::Any # (img, dist) already moved by `to`, keyed by the `to` function
     to::Any
-    bufs::Dict{Symbol, Any}   # device buffers reused across rounds (grown geometrically)
+    bufs::Dict{Symbol, Any} # device buffers reused across rounds (grown geometrically)
 end
 ViewCache() = ViewCache(nothing, nothing, Dict{Symbol, Any}())
 
@@ -181,18 +181,30 @@ function _pagelen(T, n)
 end
 function _wrap!(vc::ViewCache, key::Symbol, x::Vector, to::Unified)
     c = get(vc.bufs, key, nothing)
-    UInt(pointer(x)) % _PAGE == 0 || return _copyup!(vc, Symbol(key, :_copy), x, to.copy) # not page-aligned: copy
+    UInt(pointer(x)) % _PAGE == 0 || return _copyup!(
+        vc,
+        Symbol(key, :_copy),
+        x,
+        to.copy,
+    ) # not page-aligned: copy
     if c === nothing || c[1] !== x.ref.mem || c[3] < length(x)
         # wrap all whole pages of the capacity (not just the length), so a growing tree is re-wrapped only when its host
         # array is reallocated (geometric growth); reserve half again first when even that would not hold x
         m = _pagefloor(eltype(x), length(x.ref.mem))
-        if m < max(length(x), 1) # also: at least one page, even for an empty array
+        if m < max(length(x), 1)
+            # also: at least one page, even for an empty array
             sizehint!(x, _pagelen(eltype(x), length(x) + length(x) ÷ 2))
             m = _pagefloor(eltype(x), length(x.ref.mem))
         end
-        UInt(pointer(x)) % _PAGE == 0 || return _copyup!(vc, Symbol(key, :_copy), x, to.copy) # moved by sizehint!: check again
+        UInt(pointer(x)) % _PAGE == 0 || return _copyup!(
+            vc,
+            Symbol(key, :_copy),
+            x,
+            to.copy,
+        ) # moved by sizehint!: check again
         d = to.wrap(unsafe_wrap(Array, pointer(x), m))
-        c = (x.ref.mem, d, m); vc.bufs[key] = c
+        c = (x.ref.mem, d, m)
+        vc.bufs[key] = c
     end
     return c[2]
 end
@@ -213,31 +225,90 @@ engine's arrays (no copy); with a device array constructor (for example `MtlArra
 uploaded. The domain is uploaded once per `ViewCache`.
 """
 function tree_view(E::Engine{T}, vc::ViewCache; to = identity) where {T}
-    m = E.m; g = E.g; p = E.p
+    m = E.m
+    g = E.g
+    p = E.p
     up(k, x) = _up!(vc, k, x, to)
     M = ModelView(
-        up(:pos, m.pos), up(:parent, m.parent), up(:left, m.left), up(:right, m.right), up(:flow, m.flow),
-        up(:glen, m.glen), up(:beta, m.beta), up(:radius, m.radius), m.qterm, m.lf, m.pdrop,
-        m.root_radius_max, m.gamma, m.kterm_total
+        up(:pos, m.pos),
+        up(:parent, m.parent),
+        up(:left, m.left),
+        up(:right, m.right),
+        up(:flow, m.flow),
+        up(:glen, m.glen),
+        up(:beta, m.beta),
+        up(:radius, m.radius),
+        m.qterm,
+        m.lf,
+        m.pdrop,
+        m.root_radius_max,
+        m.gamma,
+        m.kterm_total,
     )
     F = FastView(up(:Rt, E.F.Rt), up(:W, E.F.W))
     G = GridView(
-        g.origin, g.h, g.dims, g.margin, up(:cellr, g.cellr), g.growth, g.prune, up(:head, g.head),
-        up(:next, g.next), up(:item, g.item), up(:box, g.box)
+        g.origin,
+        g.h,
+        g.dims,
+        g.margin,
+        up(:cellr, g.cellr),
+        g.growth,
+        g.prune,
+        up(:head, g.head),
+        up(:next, g.next),
+        up(:item, g.item),
+        up(:box, g.box),
     )
     if vc.dom === nothing || vc.to !== to
-        vc.dom = (to(E.dom.img), to(E.dom.dist), to(E.dom.allow), to(E.dom.fine)); vc.to = to
+        vc.dom = (to(E.dom.img), to(E.dom.dist), to(E.dom.allow), to(E.dom.fine))
+        vc.to = to
     end
-    D = DomainView(vc.dom[1], vc.dom[2], vc.dom[3], E.dom.lower, E.dom.upper, E.dom.min_dist, vc.dom[4], E.dom.fine_origin, E.dom.fine_h)
+    D = DomainView(
+        vc.dom[1],
+        vc.dom[2],
+        vc.dom[3],
+        E.dom.lower,
+        E.dom.upper,
+        E.dom.min_dist,
+        vc.dom[4],
+        E.dom.fine_origin,
+        E.dom.fine_h,
+    )
     P = ParamView{T}(
-        p.num_neighbors, p.upstream_attach, T(p.max_connection * p.size_scale), T(TERRITORY_REACH * p.size_scale), p.kamiya_iters,
-        T(p.kamiya_tol * p.size_scale^3), T(p.side_branch_bias),
-        T(p.term_flow_cv), _symmetry_knots(T, p.symmetry_floor)...
+        p.num_neighbors,
+        p.upstream_attach,
+        T(p.max_connection * p.size_scale),
+        T(TERRITORY_REACH * p.size_scale),
+        p.kamiya_iters,
+        T(p.kamiya_tol * p.size_scale^3),
+        T(p.side_branch_bias),
+        T(p.term_flow_cv),
+        _symmetry_knots(T, p.symmetry_floor)...,
     )
     return TreeView(
-        M, F, G, D, P, up(:tcount, E.tcount), up(:middle, E.middle), up(:isbase, E.isbase), up(:treeid, E.treeid), E.cscale,
-        E.lscale, E.max_angle_cos, E.rmax, up(:big, E.big), length(E.big),
-        E.fix_base, E.volume === :full, _keepout(T, E), T(_level(E)), up(:roots, E.roots), up(:rcaps, E.rcaps),
-        up(:rest, E.rest), up(:rmin, E.rmin), E.open
+        M,
+        F,
+        G,
+        D,
+        P,
+        up(:tcount, E.tcount),
+        up(:middle, E.middle),
+        up(:isbase, E.isbase),
+        up(:treeid, E.treeid),
+        E.cscale,
+        E.lscale,
+        E.max_angle_cos,
+        E.rmax,
+        up(:big, E.big),
+        length(E.big),
+        E.fix_base,
+        E.volume === :full,
+        _keepout(T, E),
+        T(_level(E)),
+        up(:roots, E.roots),
+        up(:rcaps, E.rcaps),
+        up(:rest, E.rest),
+        up(:rmin, E.rmin),
+        E.open,
     )
 end

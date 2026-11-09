@@ -7,6 +7,8 @@ A release is one pull request and one registry comment. The docs deploy from `ma
 - **`version` in `Project.toml` stays at the last registered version** until a release pull request changes it. The
   `version` job in `.github/workflows/CI.yml` fails any commit whose `version` is neither that nor a valid next one.
 - **Every user-visible change adds a line under `## [Unreleased]`** in `CHANGELOG.md`, in the same pull request.
+- **Formatting and lint** follow [Fatou](https://fatou.dev)'s defaults: run `fatou format .` and
+  `docs/fatou_notebooks.sh` before pushing (the `Fatou` workflow checks both).
 
 ## Cutting a release
 

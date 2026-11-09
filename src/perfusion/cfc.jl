@@ -5,10 +5,17 @@
 
 module CFC
 
-
 export CFCThresholds, cfc_thresholds, cfc_class, CFC_NAMES
 
-const CFC_NAMES = ("normal", "minimally reduced", "mildly reduced", "moderately reduced", "severely reduced (ischemia)", "steal", "scar")
+const CFC_NAMES = (
+    "normal",
+    "minimally reduced",
+    "mildly reduced",
+    "moderately reduced",
+    "severely reduced (ischemia)",
+    "steal",
+    "scar",
+)
 
 """
     CFCThresholds
@@ -23,7 +30,7 @@ struct CFCThresholds
     cfr::NTuple{4, Float32}
     stress::NTuple{4, Float32}
     scar::Float32
-    scar_rest_only::Bool         # 2012: rest flow alone below the scar line; 2018+: rest and stress
+    scar_rest_only::Bool # 2012: rest flow alone below the scar line; 2018+: rest and stress
     name::String
 end
 
@@ -36,9 +43,21 @@ end
 function cfc_thresholds(set::Symbol = :current)
     # the category boundaries (CFR and stress flow, mL/min/g, normal -> severe), as the reference files give them
     # (test/reference; the test suite checks these against them)
-    set === :current && return CFCThresholds((2.9f0, 2.38f0, 1.6f0, 1.27f0), (2.17f0, 1.82f0, 1.09f0, 0.83f0), 0.3f0, false, "Gould 2018")
+    set === :current && return CFCThresholds(
+        (2.9f0, 2.38f0, 1.6f0, 1.27f0),
+        (2.17f0, 1.82f0, 1.09f0, 0.83f0),
+        0.3f0,
+        false,
+        "Gould 2018",
+    )
     # scar: rest flow below the lowest iso-rest-flow line, 0.2 cc/min/g (2012 Fig. 1)
-    set === :original && return CFCThresholds((3.37f0, 2.7f0, 2.03f0, 1.74f0), (2.39f0, 1.76f0, 1.12f0, 0.91f0), 0.2f0, true, "Johnson & Gould 2012")
+    set === :original && return CFCThresholds(
+        (3.37f0, 2.7f0, 2.03f0, 1.74f0),
+        (2.39f0, 1.76f0, 1.12f0, 0.91f0),
+        0.2f0,
+        true,
+        "Johnson & Gould 2012",
+    )
     throw(ArgumentError("set must be :current or :original"))
 end
 

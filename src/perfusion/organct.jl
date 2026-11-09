@@ -20,14 +20,27 @@ import AcceleratedKernels as AK
 using Atomix: @atomic
 using ..Flow: Circuit, InputCurve, VTree, frame_masses, _lengths, _bfs
 
-export Plane, pixel_point, GridSample, sample_grid, tissue_iodine, region_iodine, VesselStamp,
-    stamp_vessels, blood_volumes, unresolved_masses, render_plane
+export Plane,
+    pixel_point,
+    GridSample,
+    sample_grid,
+    tissue_iodine,
+    region_iodine,
+    VesselStamp,
+    stamp_vessels,
+    blood_volumes,
+    unresolved_masses,
+    render_plane
 
 const F32 = Float32
 
 @inline _dot(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 @inline _unit(a) = (s = sqrt(_dot(a, a)); (a[1] / s, a[2] / s, a[3] / s))
-@inline _cross(a, b) = (a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1])
+@inline _cross(a, b) = (
+    a[2] * b[3] - a[3] * b[2],
+    a[3] * b[1] - a[1] * b[3],
+    a[1] * b[2] - a[2] * b[1],
+)
 
 # ---------------------------------------------------------------------------------------------
 # Planes
@@ -46,16 +59,27 @@ struct Plane
     c::NTuple{3, F32}
     e1::NTuple{3, F32}
     e2::NTuple{3, F32}
-    nrm::NTuple{3, F32}        # e1 × e2
+    nrm::NTuple{3, F32} # e1 × e2
     n1::Int
     n2::Int
     px::F32
     slab::F32
 end
 function Plane(centre, e1, e2, n1::Integer, n2::Integer; px::Real = 0.5, slab::Real = px)
-    u = _unit(F32.(Tuple(e1))); v = F32.(Tuple(e2)); d = _dot(v, u)
+    u = _unit(F32.(Tuple(e1)))
+    v = F32.(Tuple(e2))
+    d = _dot(v, u)
     v = _unit((v[1] - d * u[1], v[2] - d * u[2], v[3] - d * u[3]))
-    return Plane(F32.(Tuple(centre)), u, v, _cross(u, v), Int(n1), Int(n2), F32(px), F32(slab))
+    return Plane(
+        F32.(Tuple(centre)),
+        u,
+        v,
+        _cross(u, v),
+        Int(n1),
+        Int(n2),
+        F32(px),
+        F32(slab),
+    )
 end
 
 """
@@ -65,14 +89,21 @@ The point of plane `P` at `x` columns and `y` rows from its top-left corner (pix
 has its centre at `x = i − ½`, `y = j − ½`).
 """
 @inline function pixel_point(P::Plane, x, y)
-    a = (F32(x) - P.n1 / 2.0f0) * P.px; b = (F32(y) - P.n2 / 2.0f0) * P.px
-    return (P.c[1] + a * P.e1[1] + b * P.e2[1], P.c[2] + a * P.e1[2] + b * P.e2[2], P.c[3] + a * P.e1[3] + b * P.e2[3])
+    a = (F32(x) - P.n1 / 2.0f0) * P.px
+    b = (F32(y) - P.n2 / 2.0f0) * P.px
+    return (
+        P.c[1] + a * P.e1[1] + b * P.e2[1],
+        P.c[2] + a * P.e1[2] + b * P.e2[2],
+        P.c[3] + a * P.e1[3] + b * P.e2[3],
+    )
 end
 
 # in-plane pixel coordinates (x, y) and signed distance from the plane of a point
 @inline function _project(P::Plane, p)
     d = (p[1] - P.c[1], p[2] - P.c[2], p[3] - P.c[3])
-    return _dot(d, P.e1) / P.px + P.n1 / 2.0f0, _dot(d, P.e2) / P.px + P.n2 / 2.0f0, _dot(d, P.nrm)
+    return _dot(d, P.e1) / P.px + P.n1 / 2.0f0,
+        _dot(d, P.e2) / P.px + P.n2 / 2.0f0,
+        _dot(d, P.nrm)
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -87,7 +118,7 @@ Trilinear weights from organ voxels to the pixels of a plane: pixel `k` takes
 number (0 = none).
 """
 struct GridSample
-    v::Matrix{Int32}           # (8, npixels)
+    v::Matrix{Int32} # (8, npixels)
     w::Matrix{F32}
 end
 
@@ -101,23 +132,39 @@ nearest voxel is in the organ takes trilinear weights over its neighbours in the
 values vary smoothly instead of in voxel blocks. Other pixels get no weights.
 """
 function sample_grid(P::Plane, vox::AbstractArray{<:Integer, 3}, lower; h::Real = 1)
-    npx = P.n1 * P.n2; V = zeros(Int32, 8, npx); W = zeros(F32, 8, npx)
-    lo = F32.(Tuple(lower)); hh = F32(h); dims = size(vox)
+    npx = P.n1 * P.n2
+    V = zeros(Int32, 8, npx)
+    W = zeros(F32, 8, npx)
+    lo = F32.(Tuple(lower))
+    hh = F32(h)
+    dims = size(vox)
     AK.foreachindex(1:npx; min_elems = 4096) do k
-        i = (k - 1) % P.n1 + 1; j = (k - 1) ÷ P.n1 + 1
+        i = (k - 1) % P.n1 + 1
+        j = (k - 1) ÷ P.n1 + 1
         p = pixel_point(P, i - 0.5f0, j - 0.5f0)
-        u = ((p[1] - lo[1]) / hh + 1.0f0, (p[2] - lo[2]) / hh + 1.0f0, (p[3] - lo[3]) / hh + 1.0f0)
+        u = (
+            (p[1] - lo[1]) / hh + 1.0f0,
+            (p[2] - lo[2]) / hh + 1.0f0,
+            (p[3] - lo[3]) / hh + 1.0f0,
+        )
         c = (round(Int, u[1]), round(Int, u[2]), round(Int, u[3]))
         inside = all(d -> 1 <= c[d] <= dims[d], 1:3) && vox[c[1], c[2], c[3]] > 0
         if inside
-            i0 = (floor(Int, u[1]), floor(Int, u[2]), floor(Int, u[3])); f = (u[1] - i0[1], u[2] - i0[2], u[3] - i0[3])
+            i0 = (floor(Int, u[1]), floor(Int, u[2]), floor(Int, u[3]))
+            f = (u[1] - i0[1], u[2] - i0[2], u[3] - i0[3])
             tot = 0.0f0
             for s in 0:7
-                o = (s & 1, (s >> 1) & 1, (s >> 2) & 1); I = (i0[1] + o[1], i0[2] + o[2], i0[3] + o[3])
+                o = (s & 1, (s >> 1) & 1, (s >> 2) & 1)
+                I = (i0[1] + o[1], i0[2] + o[2], i0[3] + o[3])
                 all(d -> 1 <= I[d] <= dims[d], 1:3) || continue
-                v = vox[I[1], I[2], I[3]]; v > 0 || continue
-                wt = (o[1] == 1 ? f[1] : 1.0f0 - f[1]) * (o[2] == 1 ? f[2] : 1.0f0 - f[2]) * (o[3] == 1 ? f[3] : 1.0f0 - f[3])
-                V[s + 1, k] = v; W[s + 1, k] = wt; tot += wt
+                v = vox[I[1], I[2], I[3]]
+                v > 0 || continue
+                wt = (o[1] == 1 ? f[1] : 1.0f0 - f[1]) *
+                    (o[2] == 1 ? f[2] : 1.0f0 - f[2]) *
+                    (o[3] == 1 ? f[3] : 1.0f0 - f[3])
+                V[s + 1, k] = v
+                W[s + 1, k] = wt
+                tot += wt
             end
             if tot > 0
                 for s in 1:8
@@ -132,7 +179,8 @@ end
 # the (voxel row, terminal, weight / territory) entries of `pairs` whose voxel has a row
 function _bed_tables(pairs, terr, row)
     keep = [k for (k, (v, i, w)) in enumerate(pairs) if v <= length(row) && row[v] > 0]
-    pv = Int32[row[pairs[k][1]] for k in keep]; pi = Int32[pairs[k][2] for k in keep]
+    pv = Int32[row[pairs[k][1]] for k in keep]
+    pi = Int32[pairs[k][2] for k in keep]
     pw = F32[pairs[k][3] / terr[pairs[k][2]] for k in keep]
     return pv, pi, pw
 end
@@ -150,39 +198,61 @@ are the territory volumes (mL), both from `territory_shares`. `voxels` selects t
 [`GridSample`](@ref) in place of `voxels` the result is per pixel of that plane. With a circuit and
 an input curve, `tm` comes from `frame_masses(c, inp, times)`.
 """
-function tissue_iodine(tm::AbstractMatrix, pairs, terr, voxels::AbstractVector{<:Integer}; to = identity)
-    nf = size(tm, 1); row = zeros(Int32, maximum(voxels; init = 0))
+function tissue_iodine(
+    tm::AbstractMatrix,
+    pairs,
+    terr,
+    voxels::AbstractVector{<:Integer};
+    to = identity,
+)
+    nf = size(tm, 1)
+    row = zeros(Int32, maximum(voxels; init = 0))
     for (k, v) in enumerate(voxels)
         row[v] = k
     end
-    pv, pi, pw = to.(_bed_tables(pairs, terr, row)); np = length(pv)
+    pv, pi, pw = to.(_bed_tables(pairs, terr, row))
+    np = length(pv)
     out = to(zeros(F32, length(voxels), nf))
     AK.foreachindex(1:(np * nf); backend = AK.get_backend(out), min_elems = 4096) do e
-        p = (e - 1) % np + 1; f = (e - 1) ÷ np + 1
+        p = (e - 1) % np + 1
+        f = (e - 1) ÷ np + 1
         @atomic out[pv[p], f] += pw[p] * tm[f, pi[p]]
     end
     return out
 end
 function tissue_iodine(tm::AbstractMatrix, pairs, terr, G::GridSample; to = identity)
-    voxels = sort!(unique(filter(>(0), vec(G.v)))); nf = size(tm, 1)
+    voxels = sort!(unique(filter(>(0), vec(G.v))))
+    nf = size(tm, 1)
     X = tissue_iodine(tm, pairs, terr, voxels; to)
     row = zeros(Int32, maximum(voxels; init = 0))
     for (k, v) in enumerate(voxels)
         row[v] = k
     end
-    gv = to(Int32[v > 0 ? row[v] : 0 for v in G.v]); gw = to(G.w); npx = size(G.v, 2)
+    gv = to(Int32[v > 0 ? row[v] : 0 for v in G.v])
+    gw = to(G.w)
+    npx = size(G.v, 2)
     out = to(zeros(F32, npx, nf))
     AK.foreachindex(1:(npx * nf); backend = AK.get_backend(out), min_elems = 4096) do e
-        k = (e - 1) % npx + 1; f = (e - 1) ÷ npx + 1; s_ = 0.0f0
+        k = (e - 1) % npx + 1
+        f = (e - 1) ÷ npx + 1
+        s_ = 0.0f0
         for s in 1:8
-            r = gv[s, k]; r > 0 && (s_ += gw[s, k] * X[r, f])
+            r = gv[s, k]
+            r > 0 && (s_ += gw[s, k] * X[r, f])
         end
         out[k, f] = s_
     end
     return out
 end
-tissue_iodine(c::Circuit, inp::InputCurve, times, pairs, terr, voxels; to = identity) =
-    tissue_iodine(frame_masses(c, inp, times; to)[3], pairs, terr, voxels; to)
+tissue_iodine(
+    c::Circuit,
+    inp::InputCurve,
+    times,
+    pairs,
+    terr,
+    voxels;
+    to = identity,
+) = tissue_iodine(frame_masses(c, inp, times; to)[3], pairs, terr, voxels; to)
 
 """
     region_iodine(tm, pairs, terr, voxels; to = identity) -> Vector (ntimes)
@@ -190,12 +260,19 @@ tissue_iodine(c::Circuit, inp::InputCurve, times, pairs, terr, voxels; to = iden
 Mean tissue iodine (mg/mL) over the voxels `voxels` at every frame: the mean of the rows of
 [`tissue_iodine`](@ref), without building them (one weight per terminal, then `tm` times it).
 """
-function region_iodine(tm::AbstractMatrix, pairs, terr, voxels::AbstractVector{<:Integer}; to = identity)
+function region_iodine(
+    tm::AbstractMatrix,
+    pairs,
+    terr,
+    voxels::AbstractVector{<:Integer};
+    to = identity,
+)
     row = zeros(Int32, maximum(voxels; init = 0))
     for v in voxels
         row[v] = 1
     end
-    _, pi, pw = to.(_bed_tables(pairs, terr, row)); s = to(zeros(F32, size(tm, 2)))
+    _, pi, pw = to.(_bed_tables(pairs, terr, row))
+    s = to(zeros(F32, size(tm, 2)))
     AK.foreachindex(1:length(pi); backend = AK.get_backend(s), min_elems = 4096) do p
         @atomic s[pi[p]] += pw[p]
     end
@@ -218,24 +295,29 @@ struct VesselStamp
     cover::Vector{F32}
     dpix::Vector{Int32}
     dseg::Vector{Int32}
-    dw::Vector{F32}            # 1/mL
+    dw::Vector{F32} # 1/mL
 end
 
 # distance from point p to the segment a–b
 @inline function _segdist(p, a, b)
-    ab = (b[1] - a[1], b[2] - a[2], b[3] - a[3]); ap = (p[1] - a[1], p[2] - a[2], p[3] - a[3])
-    L2 = _dot(ab, ab); t = L2 > 0 ? clamp(_dot(ap, ab) / L2, 0.0f0, 1.0f0) : 0.0f0
+    ab = (b[1] - a[1], b[2] - a[2], b[3] - a[3])
+    ap = (p[1] - a[1], p[2] - a[2], p[3] - a[3])
+    L2 = _dot(ab, ab)
+    t = L2 > 0 ? clamp(_dot(ap, ab) / L2, 0.0f0, 1.0f0) : 0.0f0
     d = (ap[1] - t * ab[1], ap[2] - t * ab[2], ap[3] - t * ab[3])
     return sqrt(_dot(d, d))
 end
 
 # Count (emit = nothing) or emit the tube candidates of segment j: (pixel, 4-bit sub-sample mask, d/r)
 function _tube(P::Plane, a, b, r, emit)
-    xa, ya, da = _project(P, a); xb, yb, db = _project(P, b)
+    xa, ya, da = _project(P, a)
+    xb, yb, db = _project(P, b)
     (min(da, db) > r || max(da, db) < -r) && return 0
     rp = r / P.px
-    i0 = max(1, floor(Int, min(xa, xb) - rp)); i1 = min(P.n1, ceil(Int, max(xa, xb) + rp) + 1)
-    j0 = max(1, floor(Int, min(ya, yb) - rp)); j1 = min(P.n2, ceil(Int, max(ya, yb) + rp) + 1)
+    i0 = max(1, floor(Int, min(xa, xb) - rp))
+    i1 = min(P.n1, ceil(Int, max(xa, xb) + rp) + 1)
+    j0 = max(1, floor(Int, min(ya, yb) - rp))
+    j1 = min(P.n2, ceil(Int, max(ya, yb) + rp) + 1)
     k = 0
     for j in j0:j1, i in i0:i1
         m = 0x00
@@ -245,23 +327,36 @@ function _tube(P::Plane, a, b, r, emit)
         end
         m == 0x00 && continue
         k += 1
-        emit === nothing || emit(k, i + P.n1 * (j - 1), m, _segdist(pixel_point(P, i - 0.5f0, j - 0.5f0), a, b) / r)
+        emit === nothing ||
+            emit(
+                k,
+                i + P.n1 * (j - 1),
+                m,
+                _segdist(pixel_point(P, i - 0.5f0, j - 0.5f0), a, b) / r,
+            )
     end
     return k
 end
 
 # Count or emit the sub-pixel samples of segment j inside the slab: (pixel, weight 1/mL)
 function _deposit(P::Plane, a, b, step, emit)
-    _, _, da = _project(P, a); _, _, db = _project(P, b); h = P.slab / 2
+    _, _, da = _project(P, a)
+    _, _, db = _project(P, b)
+    h = P.slab / 2
     (min(da, db) > h || max(da, db) < -h) && return 0
-    L = sqrt((b[1] - a[1])^2 + (b[2] - a[2])^2 + (b[3] - a[3])^2); ns = max(1, ceil(Int, L / step))
-    w = (1.0f0 / ns) / (P.px * P.px * P.slab * 1.0f-3)      # mg per mL of the pixel's voxel
+    L = sqrt((b[1] - a[1])^2 + (b[2] - a[2])^2 + (b[3] - a[3])^2)
+    ns = max(1, ceil(Int, L / step))
+    w = (1.0f0 / ns) / (P.px * P.px * P.slab * 1.0f-3) # mg per mL of the pixel's voxel
     k = 0
     for s in 1:ns
         u = (s - 0.5f0) / ns
-        x, y, d = _project(P, (a[1] + u * (b[1] - a[1]), a[2] + u * (b[2] - a[2]), a[3] + u * (b[3] - a[3])))
+        x, y, d = _project(
+            P,
+            (a[1] + u * (b[1] - a[1]), a[2] + u * (b[2] - a[2]), a[3] + u * (b[3] - a[3])),
+        )
         abs(d) <= h || continue
-        i = floor(Int, x) + 1; j = floor(Int, y) + 1
+        i = floor(Int, x) + 1
+        j = floor(Int, y) + 1
         (1 <= i <= P.n1 && 1 <= j <= P.n2) || continue
         k += 1
         emit === nothing || emit(k, i + P.n1 * (j - 1), w)
@@ -281,38 +376,80 @@ the pixel's voxel (`px² · slab`), so its iodine is conserved. With `deposit = 
 iodine then belongs in the tissue: [`unresolved_masses`](@ref)). `weight` (per pixel, 0-1) is the share of a pixel a lumen
 may replace, e.g. the share of its sub-samples that are tissue, as a phantom replaces only tissue voxels.
 """
-function stamp_vessels(P::Plane, trees::VTree...; rtube::Real = P.px / 2, step::Real = 0.1, deposit::Bool = true, weight = nothing)
-    rt = F32(rtube); st = F32(step)
-    tp = Int32[]; ts = Int32[]; tm = UInt8[]; tq = F32[]; dp = Int32[]; ds = Int32[]; dw = F32[]
+function stamp_vessels(
+    P::Plane,
+    trees::VTree...;
+    rtube::Real = P.px / 2,
+    step::Real = 0.1,
+    deposit::Bool = true,
+    weight = nothing,
+)
+    rt = F32(rtube)
+    st = F32(step)
+    tp = Int32[]
+    ts = Int32[]
+    tm = UInt8[]
+    tq = F32[]
+    dp = Int32[]
+    ds = Int32[]
+    dw = F32[]
     off = 0
     for t in trees
-        n = length(t.r); A = t.a; B = t.b; R = t.r
+        n = length(t.r)
+        A = t.a
+        B = t.b
+        R = t.r
         ends(j) = ((A[1, j], A[2, j], A[3, j]), (B[1, j], B[2, j], B[3, j]))
-        visit(j, et, ed) = (e = ends(j); R[j] >= rt ? _tube(P, e[1], e[2], R[j], et) : _deposit(P, e[1], e[2], st, ed))
+        visit(j, et, ed) = (
+            e = ends(j);
+            R[j] >= rt ? _tube(P, e[1], e[2], R[j], et) : _deposit(P, e[1], e[2], st, ed)
+        )
         cnt = zeros(Int32, n)
         AK.foreachindex(1:n; min_elems = 1024) do j
             cnt[j] = visit(j, nothing, nothing)
         end
-        tube = R .>= rt; ct = ifelse.(tube, cnt, Int32(0)); cd = ifelse.(tube, Int32(0), cnt)
+        tube = R .>= rt
+        ct = ifelse.(tube, cnt, Int32(0))
+        cd = ifelse.(tube, Int32(0), cnt)
         ot = AK.accumulate(+, ct; init = Int32(0)) .- ct .+ Int32(length(tp))
         od = AK.accumulate(+, cd; init = Int32(0)) .- cd .+ Int32(length(dp))
-        append!(tp, zeros(Int32, sum(ct))); append!(ts, zeros(Int32, sum(ct))); append!(tm, zeros(UInt8, sum(ct))); append!(tq, zeros(F32, sum(ct)))
-        append!(dp, zeros(Int32, sum(cd))); append!(ds, zeros(Int32, sum(cd))); append!(dw, zeros(F32, sum(cd)))
+        append!(tp, zeros(Int32, sum(ct)))
+        append!(ts, zeros(Int32, sum(ct)))
+        append!(tm, zeros(UInt8, sum(ct)))
+        append!(tq, zeros(F32, sum(ct)))
+        append!(dp, zeros(Int32, sum(cd)))
+        append!(ds, zeros(Int32, sum(cd)))
+        append!(dw, zeros(F32, sum(cd)))
         AK.foreachindex(1:n; min_elems = 1024) do j
             cnt[j] > 0 || return
             visit(
-                j, (k, q, m, dr) -> (e = ot[j] + k; tp[e] = q; ts[e] = off + j; tm[e] = m; tq[e] = dr),
-                (k, q, w) -> (e = od[j] + k; dp[e] = q; ds[e] = off + j; dw[e] = w)
+                j,
+                (k, q, m, dr) -> (
+                    e = ot[j] + k;
+                    tp[e] = q;
+                    ts[e] = off + j;
+                    tm[e] = m;
+                    tq[e] = dr
+                ),
+                (k, q, w) -> (e = od[j] + k; dp[e] = q; ds[e] = off + j; dw[e] = w),
             )
         end
         off += n
     end
     # each pixel: the segment covering most sub-samples (ties: nearest axis), cover = union of all
-    npx = P.n1 * P.n2; seg = zeros(Int32, npx); bits = zeros(UInt8, npx); best = zeros(Int, npx); bq = fill(Inf32, npx)
+    npx = P.n1 * P.n2
+    seg = zeros(Int32, npx)
+    bits = zeros(UInt8, npx)
+    best = zeros(Int, npx)
+    bq = fill(Inf32, npx)
     for e in eachindex(tp)
-        q = tp[e]; c = count_ones(tm[e]); bits[q] |= tm[e]
+        q = tp[e]
+        c = count_ones(tm[e])
+        bits[q] |= tm[e]
         if c > best[q] || (c == best[q] && tq[e] < bq[q])
-            best[q] = c; bq[q] = tq[e]; seg[q] = ts[e]
+            best[q] = c
+            bq[q] = tq[e]
+            seg[q] = ts[e]
         end
     end
     cover = F32.(count_ones.(bits)) ./ 4.0f0
@@ -323,9 +460,11 @@ end
 
 # a tree's segments grouped by depth (roots first), so each level can be processed in parallel after its parents
 function _levels(parent::AbstractVector{<:Integer})
-    order = _bfs(Vector{Int32}(parent)); d = zeros(Int32, length(parent))
+    order = _bfs(Vector{Int32}(parent))
+    d = zeros(Int32, length(parent))
     for j in order
-        p = parent[j]; d[j] = p == 0 ? 1 : d[p] + 1
+        p = parent[j]
+        d[j] = p == 0 ? 1 : d[p] + 1
     end
     L = [Int32[] for _ in 1:maximum(d; init = 0)]
     for j in order
@@ -344,46 +483,83 @@ vessels a picture or phantom does not draw as lumens. Imaged segments (`isbase`)
 `undrawn = (arteries, veins)`, two Bool vectors, names the unresolved segments explicitly instead (e.g. every segment a
 phantom painted no voxel of); `rmin` is then not used.
 """
-function unresolved_masses(C::Circuit, am::AbstractMatrix, vm::AbstractMatrix; rmin::Real = 0, undrawn = nothing)
-    nf = size(am, 1); t = C.tree; v = C.veins; nt = length(C.terminals); rm = F32(rmin)
-    ua = undrawn === nothing ? [t.r[j] < rm && !t.isbase[j] for j in eachindex(t.r)] : collect(Bool, undrawn[1])
-    uv = undrawn === nothing ? [v.r[k] < rm && !v.isbase[k] for k in eachindex(v.r)] : collect(Bool, undrawn[2])
-    H = zeros(F32, nf, length(t.r))                 # Σ over thin ancestors (and itself) of mass / forward flow below
-    par = t.parent; q = C.q; term = C.terminals
-    order = _bfs(Vector{Int32}(par)); qf = zeros(F32, length(t.r))   # forward bed flow below each artery
+function unresolved_masses(
+    C::Circuit,
+    am::AbstractMatrix,
+    vm::AbstractMatrix;
+    rmin::Real = 0,
+    undrawn = nothing,
+)
+    nf = size(am, 1)
+    t = C.tree
+    v = C.veins
+    nt = length(C.terminals)
+    rm = F32(rmin)
+    ua = undrawn === nothing ?
+        [t.r[j] < rm && !t.isbase[j] for j in eachindex(t.r)] :
+        collect(Bool, undrawn[1])
+    uv = undrawn === nothing ?
+        [v.r[k] < rm && !v.isbase[k] for k in eachindex(v.r)] :
+        collect(Bool, undrawn[2])
+    H = zeros(
+        F32,
+        nf,
+        length(t.r),
+    ) # Σ over thin ancestors (and itself) of mass / forward flow below
+    par = t.parent
+    q = C.q
+    term = C.terminals
+    order = _bfs(Vector{Int32}(par))
+    qf = zeros(F32, length(t.r)) # forward bed flow below each artery
     for i in 1:nt
         qf[term[i]] = max(q[term[i]], 0.0f0)
     end
     for h in length(order):-1:1
-        j = order[h]; p = par[j]; p > 0 && (qf[p] += qf[j])
+        j = order[h]
+        p = par[j]
+        p > 0 && (qf[p] += qf[j])
     end
-    for lv in _levels(t.parent)                     # a level's segments are independent; each holds its frames contiguous
+    for lv in _levels(t.parent)
+        # a level's segments are independent; each holds its frames contiguous
         AK.foreachindex(lv; min_elems = 2048) do h
-            j = lv[h]; p = par[j]; thin = ua[j] && q[j] > 0 && qf[j] > 0
+            j = lv[h]
+            p = par[j]
+            thin = ua[j] && q[j] > 0 && qf[j] > 0
             for f in 1:nf
                 H[f, j] = (p == 0 ? 0.0f0 : H[f, p]) + (thin ? am[f, j] / qf[j] : 0.0f0)
             end
         end
     end
-    vorder = _bfs(v.parent); qr = zeros(F32, length(v.r))  # plasma routed through each vein
+    vorder = _bfs(v.parent)
+    qr = zeros(F32, length(v.r)) # plasma routed through each vein
     for i in 1:nt
         qr[C.vleaf[i]] += C.fp[i]
     end
     for h in length(vorder):-1:1
-        k = vorder[h]; p = v.parent[k]; p > 0 && (qr[p] += qr[k])
+        k = vorder[h]
+        p = v.parent[k]
+        p > 0 && (qr[p] += qr[k])
     end
-    Hv = zeros(F32, nf, length(v.r)); vpar = v.parent
+    Hv = zeros(F32, nf, length(v.r))
+    vpar = v.parent
     for lv in _levels(v.parent)
         AK.foreachindex(lv; min_elems = 2048) do h
-            k = lv[h]; p = vpar[k]; thin = uv[k] && qr[k] > 0
+            k = lv[h]
+            p = vpar[k]
+            thin = uv[k] && qr[k] > 0
             for f in 1:nf
                 Hv[f, k] = (p == 0 ? 0.0f0 : Hv[f, p]) + (thin ? vm[f, k] / qr[k] : 0.0f0)
             end
         end
     end
-    X = zeros(F32, nf, nt); vl = C.vleaf; fpv = C.fp
+    X = zeros(F32, nf, nt)
+    vl = C.vleaf
+    fpv = C.fp
     AK.foreachindex(1:nt; min_elems = 4096) do i
-        j = term[i]; k = vl[i]; qa = qf[j]; fp = fpv[i]
+        j = term[i]
+        k = vl[i]
+        qa = qf[j]
+        fp = fpv[i]
         for f in 1:nf
             X[f, i] = qa * H[f, j] + fp * Hv[f, k]
         end
@@ -403,7 +579,8 @@ radius growth left the segment.
 """
 function blood_volumes(C::Circuit)
     pf = 1.0f0 - C.phys.hd
-    va = _lengths(C.tree)[2] .* C.xd .^ 2; vv = _lengths(C.veins)[2]
+    va = _lengths(C.tree)[2] .* C.xd.^2
+    vv = _lengths(C.veins)[2]
     for j in eachindex(va)
         C.tree.isbase[j] && (va[j] = C.vp_a[j] / pf)
     end
@@ -428,21 +605,44 @@ deposits. Where a tube covers the fraction `c` of a pixel, that fraction shows i
 `hcat(am, vm)` of `frame_masses` and [`blood_volumes`](@ref)`(C)`.
 """
 function render_plane(
-        P::Plane, base::AbstractVector, tissue, S::VesselStamp, masses::AbstractMatrix, vol::AbstractVector;
-        hu_per_mg::Real, blood_hu::Real, to = identity
-    )
-    npx = P.n1 * P.n2; nf = size(masses, 1); k_ = F32(hu_per_mg); bh = F32(blood_hu)
-    length(base) == npx || throw(DimensionMismatch("base has $(length(base)) pixels, the plane $npx"))
-    m = to(masses); v = to(F32.(vol)); b = to(F32.(base)); seg = to(S.seg); cov = to(S.cover)
+    P::Plane,
+    base::AbstractVector,
+    tissue,
+    S::VesselStamp,
+    masses::AbstractMatrix,
+    vol::AbstractVector;
+    hu_per_mg::Real,
+    blood_hu::Real,
+    to = identity,
+)
+    npx = P.n1 * P.n2
+    nf = size(masses, 1)
+    k_ = F32(hu_per_mg)
+    bh = F32(blood_hu)
+    length(base) == npx ||
+        throw(DimensionMismatch("base has $(length(base)) pixels, the plane $npx"))
+    m = to(masses)
+    v = to(F32.(vol))
+    b = to(F32.(base))
+    seg = to(S.seg)
+    cov = to(S.cover)
     tis = tissue === nothing ? to(zeros(F32, npx, nf)) : tissue
-    dep = to(zeros(F32, npx, nf)); dpix = to(S.dpix); dseg = to(S.dseg); dw = to(S.dw); nd = length(S.dpix)
+    dep = to(zeros(F32, npx, nf))
+    dpix = to(S.dpix)
+    dseg = to(S.dseg)
+    dw = to(S.dw)
+    nd = length(S.dpix)
     AK.foreachindex(1:(nd * nf); backend = AK.get_backend(dep), min_elems = 4096) do e
-        p = (e - 1) % nd + 1; f = (e - 1) ÷ nd + 1; x = m[f, dseg[p]]
+        p = (e - 1) % nd + 1
+        f = (e - 1) ÷ nd + 1
+        x = m[f, dseg[p]]
         x > 0 && (@atomic dep[dpix[p], f] += dw[p] * x)
     end
     img = to(zeros(F32, npx, nf))
     AK.foreachindex(img; min_elems = 4096) do e
-        k = (e - 1) % npx + 1; f = (e - 1) ÷ npx + 1; g = seg[k]
+        k = (e - 1) % npx + 1
+        f = (e - 1) ÷ npx + 1
+        g = seg[k]
         h = b[k] + k_ * (tis[k, f] + dep[k, f])
         g > 0 && (h = (1.0f0 - cov[k]) * h + cov[k] * (bh + k_ * m[f, g] / v[g]))
         img[e] = h

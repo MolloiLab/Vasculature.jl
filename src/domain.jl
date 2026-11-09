@@ -4,7 +4,7 @@
 # transformation (ExactPredicateLpSeparableMetric<.,2>): pow(squared distance, 0.5) to the
 # nearest background voxel inside the image domain.
 
-const MASK_THRESHOLD = 0x80   # myMaskThreshold = 128
+const MASK_THRESHOLD = 0x80 # myMaskThreshold = 128
 
 # One line of the separable exact Lp distance transform: out[x] = min_i g[i] + |x - i|^p over
 # integer raw distances (DGtal's RawValue). Translates of |t|^p cross at most once, so the
@@ -41,8 +41,10 @@ function distance_map(::Type{T}, img::AbstractArray{UInt8, 3}; p::Integer = 3) w
     for dim in 1:3
         n = size(D, dim)
         others = [size(D, d) for d in 1:3 if d != dim]
-        AK.foreachindex(1:prod(others); min_elems = 64) do j      # independent lines; exact integer passes
-            g = Vector{Int64}(undef, nmax); out = similar(g)
+        AK.foreachindex(1:prod(others); min_elems = 64) do j
+            # independent lines; exact integer passes
+            g = Vector{Int64}(undef, nmax)
+            out = similar(g)
             a, b = (j - 1) % others[1] + 1, (j - 1) ÷ others[1] + 1
             idx(u) = dim == 1 ? (u, a, b) : dim == 2 ? (a, u, b) : (a, b, u)
             for u in 1:n
@@ -77,13 +79,19 @@ mutable struct MaskDomain{T}
     nbtry::Int
     cache::Vector{NTuple{3, Int32}}
     cache_dist::T
-    allow::Array{UInt16, 3}    # optional per-voxel territory (see `set_territories!`); empty: unused
-    fine::Array{UInt8, 3}      # optional fine forbidden mask (see `set_forbidden!`); 1×1×1 zero: unused
-    fine_origin::NTuple{3, T}  # mm position of fine cell (1,1,1)'s centre
-    fine_h::T                  # fine cell size, mm (0: unused)
+    allow::Array{
+        UInt16,
+        3,
+    } # optional per-voxel territory (see `set_territories!`); empty: unused
+    fine::Array{
+        UInt8,
+        3,
+    } # optional fine forbidden mask (see `set_forbidden!`); 1×1×1 zero: unused
+    fine_origin::NTuple{3, T} # mm position of fine cell (1,1,1)'s centre
+    fine_h::T # fine cell size, mm (0: unused)
 end
 
-const NOTERM = 0x8000          # territory bit: traversable by vessels, but no terminal here
+const NOTERM = 0x8000 # territory bit: traversable by vessels, but no terminal here
 
 """
     set_territories!(dom, allow::Array{UInt16,3})
@@ -94,8 +102,10 @@ a voxel vessels may pass through but where no terminal is placed (for example ti
 epicardial artery and the myocardium).
 """
 function set_territories!(d::MaskDomain, allow::Array{UInt16, 3})
-    size(allow) == size(d.img) || throw(ArgumentError("territory array must match the domain image"))
-    d.allow = allow; empty!(d.cache)
+    size(allow) == size(d.img) ||
+        throw(ArgumentError("territory array must match the domain image"))
+    d.allow = allow
+    empty!(d.cache)
     return d
 end
 """
@@ -107,9 +117,16 @@ sampled at `h/8` and the candidate is rejected if any sample lies in a forbidden
 finer than the domain grid, so thin walls keep their terminals while no vessel crosses into
 what the mask forbids.
 """
-set_forbidden!(d::MaskDomain, mask::AbstractArray{Bool, 3}, origin, h::Real) = set_forbidden!(d, UInt8.(mask), origin, h)   # true = forbidden
+set_forbidden!(
+    d::MaskDomain,
+    mask::AbstractArray{Bool, 3},
+    origin,
+    h::Real,
+) = set_forbidden!(d, UInt8.(mask), origin, h) # true = forbidden
 function set_forbidden!(d::MaskDomain{T}, mask::Array{UInt8, 3}, origin, h::Real) where {T}
-    d.fine = mask; d.fine_origin = T.(Tuple(origin)); d.fine_h = T(h)
+    d.fine = mask
+    d.fine_origin = T.(Tuple(origin))
+    d.fine_h = T(h)
     return d
 end
 
@@ -117,8 +134,10 @@ end
 @inline function segment_clear(d, a::P3{T}, b::P3{T}) where {T}
     h = d.fine_h
     h > zero(T) || return true
-    L = norm3(sub3(b, a)); n = max(1, ceil(Int, 8 * L / h))     # samples every h/8
-    F = d.fine; o = d.fine_origin
+    L = norm3(sub3(b, a))
+    n = max(1, ceil(Int, 8 * L / h)) # samples every h/8
+    F = d.fine
+    o = d.fine_origin
     @inbounds for s in 0:n
         w = T(s) / T(n)
         i = round(Int, (a[1] + w * (b[1] - a[1]) - o[1]) / h) + 1
@@ -130,7 +149,8 @@ end
     return true
 end
 
-@inline _noterm(d, p) = !isempty(d.allow) && (@inbounds(d.allow[_ix(d, p)...]) & NOTERM) != 0
+@inline _noterm(d, p) = !isempty(d.allow) &&
+    (@inbounds(d.allow[_ix(d, p)...]) & NOTERM) != 0
 
 """
     read_vol_union(paths) -> (img, lower)
@@ -154,18 +174,31 @@ function read_vol_union(paths::AbstractVector{<:AbstractString})
 end
 
 function MaskDomain{T}(
-        path::Union{AbstractString, AbstractVector{<:AbstractString}};
-        root::Union{Nothing, NTuple{3, <:Integer}} = nothing,
-        min_dist::Real = 5.0, nbtry::Integer = 100, metric::Symbol = :upstream
-    ) where {T}
-    metric in (:upstream, :euclidean) || throw(ArgumentError("metric must be :upstream (L3, as HCT-CCO) or :euclidean"))
+    path::Union{AbstractString, AbstractVector{<:AbstractString}};
+    root::Union{Nothing, NTuple{3, <:Integer}} = nothing,
+    min_dist::Real = 5.0,
+    nbtry::Integer = 100,
+    metric::Symbol = :upstream,
+) where {T}
+    metric in (:upstream, :euclidean) ||
+        throw(ArgumentError("metric must be :upstream (L3, as HCT-CCO) or :euclidean"))
     img, lower = path isa AbstractString ? read_vol(path) : read_vol_union(path)
     upper = lower .+ Int32.(size(img)) .- Int32(1)
     dist = distance_map(T, img; p = metric === :euclidean ? 2 : 3)
     d = MaskDomain{T}(
-        img, dist, lower, upper, (Int32(0), Int32(0), Int32(0)), T(min_dist),
-        nbtry, NTuple{3, Int32}[], T(-1), Array{UInt16, 3}(undef, 0, 0, 0),
-        zeros(UInt8, 1, 1, 1), (zero(T), zero(T), zero(T)), zero(T)
+        img,
+        dist,
+        lower,
+        upper,
+        (Int32(0), Int32(0), Int32(0)),
+        T(min_dist),
+        nbtry,
+        NTuple{3, Int32}[],
+        T(-1),
+        Array{UInt16, 3}(undef, 0, 0, 0),
+        zeros(UInt8, 1, 1, 1),
+        (zero(T), zero(T), zero(T)),
+        zero(T),
     )
     if root !== nothing && is_inside(d, Int32.(root))
         d.center = Int32.(root)
@@ -175,8 +208,9 @@ function MaskDomain{T}(
     return d
 end
 
-@inline in_bounds(d, p::NTuple{3, Int32}) =
-    d.lower[1] <= p[1] <= d.upper[1] && d.lower[2] <= p[2] <= d.upper[2] && d.lower[3] <= p[3] <= d.upper[3]
+@inline in_bounds(d, p::NTuple{3, Int32}) = d.lower[1] <= p[1] <= d.upper[1] &&
+    d.lower[2] <= p[2] <= d.upper[2] &&
+    d.lower[3] <= p[3] <= d.upper[3]
 @inline _ix(d, p) = (p[1] - d.lower[1] + 1, p[2] - d.lower[2] + 1, p[3] - d.lower[3] + 1)
 @inline img_at(d, p::NTuple{3, Int32}) = @inbounds d.img[_ix(d, p)...]
 @inline dist_at(d, p::NTuple{3, Int32}) = @inbounds d.dist[_ix(d, p)...]
@@ -190,12 +224,14 @@ end
 
 # ImageMaskDomainCtrl::interpolateDistance (trilinear, corners in bit order x, y, z).
 @inline function _interp_axis(x::T, lo::Int32, up::Int32) where {T}
-    l = T(lo); h = T(up)
+    l = T(lo)
+    h = T(up)
     coord = cmin(cmax(x, l), h)
     base = floor(coord)
     i0 = itrunc(base)
     if i0 < lo
-        i0 = lo; base = T(i0)
+        i0 = lo
+        base = T(i0)
     end
     if i0 >= up
         i0 = up == lo ? up : up - Int32(1)
@@ -226,17 +262,25 @@ end
     return value
 end
 
-sample_distance(d::MaskDomain{T}, p::NTuple{3, Int32}) where {T} = interpolate_distance(d, (T(p[1]), T(p[2]), T(p[3])))
+sample_distance(d::MaskDomain{T}, p::NTuple{3, Int32}) where {T} = interpolate_distance(
+    d,
+    (T(p[1]), T(p[2]), T(p[3])),
+)
 
 # ImageMaskDomainCtrl::randomPoint
 # Admissible voxels, listed once; the fallback when rejection sampling fails.
 function point_cache!(d::MaskDomain)
     if isempty(d.cache) || d.cache_dist != d.min_dist
         empty!(d.cache)
-        for k in d.lower[3]:d.upper[3], j in d.lower[2]:d.upper[2], i in d.lower[1]:d.upper[1]
+        for k in d.lower[3]:d.upper[3], j in d.lower[2]:d.upper[2], i in d.lower[1]:d.upper[
+                    1,
+                ]
             p = (i, j, k)
             dist = sample_distance(d, p)
-            img_at(d, p) >= MASK_THRESHOLD && dist >= d.min_dist && !_noterm(d, p) && push!(d.cache, p)
+            img_at(d, p) >= MASK_THRESHOLD &&
+                dist >= d.min_dist &&
+                !_noterm(d, p) &&
+                push!(d.cache, p)
         end
         d.cache_dist = d.min_dist
     end
@@ -247,7 +291,11 @@ function random_point!(d::MaskDomain{T}, rng::CRand) where {T}
     dp = d.upper .- d.lower
     n = 0
     while n < d.nbtry
-        p = (d.lower[1] + crand!(rng) % dp[1], d.lower[2] + crand!(rng) % dp[2], d.lower[3] + crand!(rng) % dp[3])
+        p = (
+            d.lower[1] + crand!(rng) % dp[1],
+            d.lower[2] + crand!(rng) % dp[2],
+            d.lower[3] + crand!(rng) % dp[3],
+        )
         dist = sample_distance(d, p)
         img_at(d, p) >= MASK_THRESHOLD && dist >= d.min_dist && !_noterm(d, p) && return p
         n += 1
@@ -278,7 +326,8 @@ end
 
 # ImageMaskDomainCtrl::maxDistantPointFromBorder: first voxel (domain order) with the maximum.
 function max_distant_point(d::MaskDomain{T}) where {T}
-    m = zero(T); best = (Int32(0), Int32(0), Int32(0))
+    m = zero(T)
+    best = (Int32(0), Int32(0), Int32(0))
     for k in d.lower[3]:d.upper[3], j in d.lower[2]:d.upper[2], i in d.lower[1]:d.upper[1]
         v = dist_at(d, (i, j, k))
         v > m && (m = v; best = (i, j, k))

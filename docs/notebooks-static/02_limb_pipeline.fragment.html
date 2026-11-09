@@ -1,4 +1,4 @@
-<!-- vasculature-export-fingerprint: 0c2047fc6549cd1f47f9bddfe4dddd4e216468e373130d9d4a1ef9d93017ccd7 -->
+<!-- vasculature-export-fingerprint: 1899c8fa0f23f6955a6150e00208038ff84442a1610e6eb6e6d2ca09348aba53 -->
 <div class="snap-notebook" data-snapshot-requires="daisyui-themes@5.6.2 katex@0.11.1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.6.2/themes.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css">
@@ -2246,10 +2246,22 @@ end;</code></pre></div>
     const LEG_NRB = get(
         ENV,
         "XCAT_LEG_NRB",
-        joinpath(homedir(), "Documents", "dev", "MolloiLab", "xcat-data", "legs", "both_legs_1.nrb"),
+        joinpath(
+            homedir(),
+            "Documents",
+            "dev",
+            "MolloiLab",
+            "xcat-data",
+            "legs",
+            "both_legs_1.nrb",
+        ),
     )
     # every cached stage (pass 1, the patches, each pass-2 patch); on a cluster, a shared scratch folder
-    const CACHE_DIR = get(ENV, "LIMB_CACHE_DIR", joinpath(homedir(), "xcat-perfused", "limb_pipeline_cache"))
+    const CACHE_DIR = get(
+        ENV,
+        "LIMB_CACHE_DIR",
+        joinpath(homedir(), "xcat-perfused", "limb_pipeline_cache"),
+    )
     mkpath(CACHE_DIR)
 end;</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-c45cbbd6-6d31-4d1d-9d54-fc5dfb7870fb"><div class="pluto-docs-binding">
@@ -2299,8 +2311,26 @@ const SIX_STEPS = (
 <p><code>Vasculature.XCAT.read_nrb</code> reads XCAT&#39;s single-object format, so this grouped one has its own reader below.</p>
 </div></pluto-output></div>
 <div class="pl-cell"><pre class="pl-code"><code class="pl-jl">begin
-    const ENVELOPE = ["leg_right", "foot_right", "foot_right1", "foot_right2", "foot_right3", "foot_right4", "foot_right5"]
-    const BONES = ["r_femur", "r_tibia", "r_fibula", "r_patella", "r_talus", "r_calcaneus", "rpelvis1", "rpelvis2", "rpelvis3"]
+    const ENVELOPE = [
+        "leg_right",
+        "foot_right",
+        "foot_right1",
+        "foot_right2",
+        "foot_right3",
+        "foot_right4",
+        "foot_right5",
+    ]
+    const BONES = [
+        "r_femur",
+        "r_tibia",
+        "r_fibula",
+        "r_patella",
+        "r_talus",
+        "r_calcaneus",
+        "rpelvis1",
+        "rpelvis2",
+        "rpelvis3",
+    ]
     const LONG_BONES = ["r_femur", "r_tibia", "r_fibula"] # the fine blockers
     const ARTERIES = "arteries_rleg"
     const VEINS = "veins_rleg"
@@ -2310,7 +2340,10 @@ const SIX_STEPS = (
     "Foot bones XCAT does not name by side: the right ones are told apart by x."
     side_bone(name) = startswith(name, "metatarsal") || startswith(name, "phalanx")
     "The surfaces this notebook reads."
-    wanted(name) = name in ENVELOPE || name in BONES || name in (ARTERIES, VEINS) || (side_bone(name) &amp;&amp; !endswith(name, "_inner"))
+    wanted(name) = name in ENVELOPE ||
+        name in BONES ||
+        name in (ARTERIES, VEINS) ||
+        (side_bone(name) &amp;&amp; !endswith(name, "_inner"))
 end;</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-0928ebc1-1d0b-4b61-a361-637c87839d35"><div class="pluto-docs-binding">
 <span id="read_grouped_nrb">read_grouped_nrb</span>
@@ -2334,7 +2367,9 @@ function read_grouped_nrb(path::AbstractString, keep)
     seen = Dict{String, Int}()
     i = 1
     while i &lt;= n - 4
-        if isempty(strip(L[i])) || !endswith(rstrip(L[i + 3]), ":M") || !endswith(rstrip(L[i + 4]), ":N")
+        if isempty(strip(L[i])) ||
+                !endswith(rstrip(L[i + 3]), ":M") ||
+                !endswith(rstrip(L[i + 4]), ":N")
             i += 1
             continue
         end
@@ -2368,7 +2403,15 @@ function read_grouped_nrb(path::AbstractString, keep)
                     P[d, jj, ii] = parse(Float64, f[d])
                 end
             end
-            push!(out, V.XCAT.NurbsSurface(k == 1 ? name : @sprintf("%s__occ%03d", name, k), u, v, P))
+            push!(
+                out,
+                V.XCAT.NurbsSurface(
+                    k == 1 ? name : @sprintf("%s__occ%03d", name, k),
+                    u,
+                    v,
+                    P,
+                ),
+            )
         end
         i += M * N
     end
@@ -2394,7 +2437,11 @@ end;</code></pre></div>
 </div>
 </div>
 </pluto-output><pre class="pl-code"><code class="pl-jl">"A NURBS surface's triangle mesh, finer for surfaces with more control points."
-mesh(s) = V.XCAT.tessellate(s; nu = clamp(4 * size(s.P, 2), 64, 480), nv = clamp(4 * size(s.P, 3), 64, 480))</code></pre></div>
+mesh(s) = V.XCAT.tessellate(
+    s;
+    nu = clamp(4 * size(s.P, 2), 64, 480),
+    nv = clamp(4 * size(s.P, 3), 64, 480),
+)</code></pre></div>
 <div class="pl-cell"><pre class="pl-code"><code class="pl-jl">"""
 The leg on a 1 mm grid: its grid, the skin envelope, the bones, the soft tissue (envelope minus bone), and the fine
 blockers (femur, tibia, fibula at 0.4 mm) as `(mask, origin, h)`.
@@ -2412,7 +2459,13 @@ LEG = cached("leg") do
     fine_grid = V.grid_around(reduce(hcat, first.(long)), 0.4; margin = 2)
     fine = reduce(.|, (V.voxelize(X, T, fine_grid) for (X, T) in long))
 
-    (grid = grid, envelope = envelope, bone = bone, soft = envelope .&amp; .!bone, blockers = (fine, fine_grid.origin, 0.4))
+    (
+        grid = grid,
+        envelope = envelope,
+        bone = bone,
+        soft = envelope .&amp; .!bone,
+        blockers = (fine, fine_grid.origin, 0.4),
+    )
 end;</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-d3bfa261-2daf-42e5-9bfe-4bc1d4a72f3c"><div class="pluto-docs-binding">
 <span id="SOFT_ML">SOFT_ML</span>
@@ -2457,7 +2510,10 @@ const STEP = 2.8 * cbrt(SOFT_ML / 148.1)</code></pre></div>
 </div>
 </pluto-output><pre class="pl-code"><code class="pl-jl">"A centreline resampled every `step` mm by arc length."
 function resample(c::V.XCAT.Centerline, step::Real)
-    arc = [0.0; cumsum([sqrt(sum(abs2, c.X[:, k + 1] .- c.X[:, k])) for k in 1:(size(c.X, 2) - 1)])]
+    arc = [
+        0.0
+        cumsum([sqrt(sum(abs2, c.X[:, k + 1] .- c.X[:, k])) for k in 1:(size(c.X, 2) - 1)])
+    ]
     n = max(2, round(Int, arc[end] / step) + 1)
     X = zeros(3, n)
     r = zeros(n)
@@ -2489,23 +2545,35 @@ function imaged_tree(surfaces)
     lines = map(surfaces) do s
         c = V.XCAT.centerline(s; step = 1.0)
         # parametrized the other way round (u along the vessel): swap u and v
-        median(c.r) &gt; 15 ? V.XCAT.centerline(V.XCAT.NurbsSurface(s.name, s.v, s.u, permutedims(s.P, (1, 3, 2))); step = 1.0) : c
+        median(c.r) &gt; 15 ?
+            V.XCAT.centerline(
+                V.XCAT.NurbsSurface(s.name, s.v, s.u, permutedims(s.P, (1, 3, 2)));
+                step = 1.0,
+            ) :
+            c
     end
     top = argmax([maximum(@view l.X[3, :]) for l in lines])
     c = lines[top]
-    c.X[3, 1] &lt; c.X[3, end] &amp;&amp; (c = V.XCAT.Centerline(c.name, c.X[:, end:-1:1], reverse(c.r)))
+    c.X[3, 1] &lt; c.X[3, end] &amp;&amp;
+        (c = V.XCAT.Centerline(c.name, c.X[:, end:-1:1], reverse(c.r)))
     k0 = findfirst(k -&gt; inside(LEG.envelope, c.X[:, k]), axes(c.X, 2))
     lines[top] = V.XCAT.Centerline(c.name, c.X[:, k0:end], c.r[k0:end])
     r_root = mean(lines[top].r[1:min(10, end)])
     pieces = [resample(l, STEP) for l in lines]
     for tol in (3.0, 5.0, 8.0, 12.0, 20.0)
         try
-            return (tree = only(V.XCAT.base_forest(pieces; roots = [c.name], attach_tol = tol)), r_root, attach_tol = tol)
+            return (
+                tree = only(V.XCAT.base_forest(pieces; roots = [c.name], attach_tol = tol)),
+                r_root,
+                attach_tol = tol,
+            )
         catch e
             (e isa ErrorException &amp;&amp; occursin("base_forest", e.msg)) || rethrow()
         end
     end
-    return error("the imaged $(group(c.name)) patches do not join into one tree within 20 mm")
+    return error(
+        "the imaged $(group(c.name)) patches do not join into one tree within 20 mm",
+    )
 end</code></pre></div>
 <div class="pl-cell"><pre class="pl-code"><code class="pl-jl">"""
 The growth inputs of one vessel system: its imaged tree with penetrating stubs, the stub report, the root radius, and the
@@ -2523,7 +2591,13 @@ inlets = cached("inlets") do
             blockers = (LEG.bone, LEG.grid.origin, LEG.grid.h),
         )
         pass = V.XCAT.vessel_tube(tree, LEG.grid; margin = 1.5) .&amp; .!LEG.soft .&amp; .!LEG.bone
-        (tree = tree, report = report, r_root = base.r_root, attach_tol = base.attach_tol, pass = pass)
+        (
+            tree = tree,
+            report = report,
+            r_root = base.r_root,
+            attach_tol = base.attach_tol,
+            pass = pass,
+        )
     end
 end;</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-6e3760ce-8bde-4094-b3ba-d19d5c6cb0cb"><div class="markdown"><table><tr><th align="right"></th><th align="right">arteries</th><th align="right">veins</th></tr><tr><td align="right">root radius &#40;mm&#41;</td><td align="right">3.89</td><td align="right">4.79</td></tr><tr><td align="right">imaged nodes</td><td align="right">719</td><td align="right">983</td></tr><tr><td align="right">penetrating stubs</td><td align="right">337 of 356 sites</td><td align="right">463 of 490 sites</td></tr><tr><td align="right">lumen outside the tissue &#40;mL&#41;</td><td align="right">1</td><td align="right">1</td></tr></table>
@@ -2542,14 +2616,24 @@ function leg_figure(trees; title = "", size = (900, 900))
     g = LEG.grid
     xs = [g.origin[d] .+ (0:(g.dims[d] - 1)) .* g.h for d in 1:3]
     for (column, (view, label)) in enumerate(((1, "front (x–z)"), (2, "side (y–z)")))
-        ax = Mke.Axis(fig[1, column]; title = label, aspect = Mke.DataAspect(), xlabel = view == 1 ? "x (mm)" : "y (mm)", ylabel = "z (mm)")
+        ax = Mke.Axis(
+            fig[1, column];
+            title = label,
+            aspect = Mke.DataAspect(),
+            xlabel = view == 1 ? "x (mm)" : "y (mm)",
+            ylabel = "z (mm)",
+        )
         silhouette = dropdims(any(LEG.soft; dims = 3 - view); dims = 3 - view)
         Mke.heatmap!(ax, xs[view], xs[3], silhouette; colormap = [:white, :gray88])
         for (segments, colour, scale) in trees
             a, b, r = segments
             points = Mke.Point2f[]
             for j in eachindex(r)
-                push!(points, Mke.Point2f(a[view, j], a[3, j]), Mke.Point2f(b[view, j], b[3, j]))
+                push!(
+                    points,
+                    Mke.Point2f(a[view, j], a[3, j]),
+                    Mke.Point2f(b[view, j], b[3, j]),
+                )
             end
             widths = repeat(max.(0.4, scale .* r); inner = 2)
             Mke.linesegments!(ax, points; color = colour, linewidth = widths)
@@ -2641,7 +2725,11 @@ function grow_tree(spec, inlet, tissue, pass, grid, blockers, name)
     dir = mktempdir()
     allow = zeros(UInt16, size(tissue))
     allow[pass] .= V.NOTERM
-    domain = V.write_vol(joinpath(dir, "$name.vol"), tissue .| pass, Tuple(round.(Int, grid.origin ./ grid.h)))
+    domain = V.write_vol(
+        joinpath(dir, "$name.vol"),
+        tissue .| pass,
+        Tuple(round.(Int, grid.origin ./ grid.h)),
+    )
     gxl = V.XCAT.write_base_gxl(joinpath(dir, "$name.xml"), inlet)
     seconds = @elapsed engine = V.grow(spec, domain, [gxl]; blockers, territories = allow)
     return (tree = V.vtree(engine), seconds = seconds)
@@ -2690,7 +2778,9 @@ function flood(mask, grid, points)
     label = zeros(Int32, size(mask))
     queue = CartesianIndex{3}[]
     for (k, p) in enumerate(eachcol(points))
-        c = CartesianIndex(Tuple(clamp.(round.(Int, (p .- grid.origin) ./ grid.h) .+ 1, 1, size(mask))))
+        c = CartesianIndex(Tuple(
+            clamp.(round.(Int, (p .- grid.origin) ./ grid.h) .+ 1, 1, size(mask)),
+        ))
         mask[c] &amp;&amp; label[c] == 0 || continue
         label[c] = k
         push!(queue, c)
@@ -2754,7 +2844,8 @@ function walk(parent)
     for j in eachindex(parent)
         parent[j] == 0 ? push!(order, j) : push!(children[parent[j]], j)
     end
-    for j in order # `order` grows as it is read
+    for j in order
+        # `order` grows as it is read
         append!(order, children[j])
     end
     return order, children
@@ -2794,9 +2885,10 @@ const PATCH_TERMINALS = round.(Int, N_TOTAL .* PATCHES.voxels ./ sum(PATCHES.vox
 The pass-1 arteries at their Murray radii: each segment's final terminal count below it (`below`) and its radius
 `TERMINAL_RADIUS_MM · below^(1/γ)` (mm). A pass-1 terminal counts its patch's terminals (at least one).
 """
-PASS1_MURRAY = let t = pass1.arteries.tree, patch_of = Dict(j =&gt; k for (k, j) in enumerate(PATCHES.segment))
+PASS1_MURRAY = let t = pass1.arteries.tree,
+    patch_of = Dict(j =&gt; k for (k, j) in enumerate(PATCHES.segment))
     _, _, below = downstream(t.parent, j -&gt; max(PATCH_TERMINALS[patch_of[j]], 1))
-    (below = below, radius = TERMINAL_RADIUS_MM .* below .^ (1 / GAMMA))
+    (below = below, radius = TERMINAL_RADIUS_MM .* below.^(1 / GAMMA))
 end;</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-59b8c1c5-e00d-4e74-901c-1ac10ddf5f87"><div class="markdown"><table><tr><th align="right"></th><th align="right">value</th></tr><tr><td align="right">femoral artery: imaged / Murray from the counts</td><td align="right">3.89 / 3.89 mm</td></tr><tr><td align="right">pass-1 terminals as grown, median &#40;5–95&#37;&#41;</td><td align="right">298 µm &#40;183–456&#41;</td></tr><tr><td align="right">pass-1 terminals at their Murray radius, median &#40;5–95&#37;&#41;</td><td align="right">323 µm &#40;229–412&#41;</td></tr><tr><td align="right">every pass-1 vessel: Murray ÷ grown, median &#40;5–95&#37;&#41;</td><td align="right">1.04 &#40;0.53–1.57&#41;</td></tr></table>
 </div></pluto-output></div>
@@ -2834,11 +2926,27 @@ function grow_patch(k; tree = pass1.arteries.tree)
     soft = LEG.soft[box]
     margin = dilate(tissue, round(Int, PATCH_MARGIN_MM / g.h)) .&amp; soft .&amp; .!tissue
     inlet = V.XCAT.BaseTree("patch_$k", [0, 1], hcat(a, b), [r, r], ["pass1", "pass1"])
-    pass = (V.XCAT.vessel_tube(inlet, grid; margin = 1.5) .&amp; .!LEG.bone[box] .| margin) .&amp; .!tissue
+    pass = (V.XCAT.vessel_tube(inlet, grid; margin = 1.5) .&amp; .!LEG.bone[box] .| margin) .&amp;
+        .!tissue
     ml = count(tissue) / 1000
     nterm = PATCH_TERMINALS[k]
-    grown = grow_tree(limb_growth(nterm, ml, r), inlet, tissue, pass, grid, LEG.blockers, "patch_$k")
-    return (tree = grown.tree, seconds = grown.seconds, nterm = nterm, ml = ml, root_radius = r, segment = j)
+    grown = grow_tree(
+        limb_growth(nterm, ml, r),
+        inlet,
+        tissue,
+        pass,
+        grid,
+        LEG.blockers,
+        "patch_$k",
+    )
+    return (
+        tree = grown.tree,
+        seconds = grown.seconds,
+        nterm = nterm,
+        ml = ml,
+        root_radius = r,
+        segment = j,
+    )
 end</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-641271f3-d904-4d16-893c-848557c02b94"><div class="pluto-docs-binding">
 <span id="dilate">dilate</span>
@@ -2890,13 +2998,21 @@ REGION = let t = pass1.arteries.tree, z = t.b[3, PATCHES.segment]
         end
         return j == branch
     end
-    (branch = branch, patches = [k for (k, j) in enumerate(PATCHES.segment) if under(j) &amp;&amp; PATCHES.voxels[k] &gt; 0])
+    (
+        branch = branch,
+        patches = [
+            k
+            for (k, j) in enumerate(PATCHES.segment)
+            if under(j) &amp;&amp; PATCHES.voxels[k] &gt; 0
+        ],
+    )
 end</code></pre></div>
 <div class="pl-cell"><pre class="pl-code"><code class="pl-jl">"Pass 2 for every patch of the region, each cached on its own."
 pass2 = [
     cached("patch_$k") do
         grow_patch(k)
-    end for k in REGION.patches
+    end
+    for k in REGION.patches
 ];</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-2bdfc5d1-1351-4b5a-b678-90995faf4dd1"><div class="pluto-docs-binding">
 <span id="stitch">stitch</span>
@@ -2937,8 +3053,12 @@ function stitch(tree, radius, grown)
         n += length(t.r)
     end
     return (
-        parent = parent, a = reduce(hcat, a), b = reduce(hcat, b), r = reduce(vcat, r),
-        pass = reduce(vcat, pass), from = reduce(vcat, from),
+        parent = parent,
+        a = reduce(hcat, a),
+        b = reduce(hcat, b),
+        r = reduce(vcat, r),
+        pass = reduce(vcat, pass),
+        from = reduce(vcat, from),
     )
 end</code></pre></div>
 <div class="pl-cell"><pre class="pl-code"><code class="pl-jl">"The leg's arterial tree with the region complete to 10 µm: pass 1 at its Murray radii, the region's patches grafted in."
@@ -2952,7 +3072,9 @@ stitched = stitch(pass1.arteries.tree, PASS1_MURRAY.radius, pass2);</code></pre>
 </div>
 </pluto-output><pre class="pl-code"><code class="pl-jl">"The final terminals a terminal of `stitched` stands for: one if it was grown in pass 2, its patch's count if not."
 terminal_weight = let patch_of = Dict(j =&gt; k for (k, j) in enumerate(PATCHES.segment))
-    j -&gt; stitched.pass[j] == 2 ? 1.0 : Float64(max(PATCH_TERMINALS[patch_of[stitched.from[j]]], 1))
+    j -&gt; stitched.pass[j] == 2 ?
+        1.0 :
+        Float64(max(PATCH_TERMINALS[patch_of[stitched.from[j]]], 1))
 end</code></pre></div>
 <div class="pl-cell"><pluto-output class="rich_output" id="out-016fdbaa-8dd3-4459-b9a3-f141d21e2b05"><div class="pluto-docs-binding">
 <span id="pressure_drop">pressure_drop</span>
@@ -2976,7 +3098,13 @@ function pressure_drop(tree, q, weight; phys = LIMB_FLOW)
     for j in order
         L = Float32(sqrt(sum(abs2, tree.b[:, j] .- tree.a[:, j])))
         r = tree.r[j]
-        drop = V.Flow.poiseuille(L, r, phys.plasma_viscosity_mPas * V.Flow.mu_rel(2000 * r, phys.hd)) * unit * n[j]
+        drop = V.Flow.poiseuille(
+            L,
+            r,
+            phys.plasma_viscosity_mPas * V.Flow.mu_rel(2000 * r, phys.hd),
+        ) *
+            unit *
+            n[j]
         P[j] = (tree.parent[j] == 0 ? 0.0 : P[tree.parent[j]]) + drop
     end
     ends = findall(isempty, children)
@@ -3020,8 +3148,7 @@ The leg's flow physiology: the fields that differ from the heart's, each with it
 as a preset once its sources are in `test/reference/`, as every preset's are. The heart-only fields take the leg's
 no-change values: no measured blood-volume rise under adenosine (`fb_dilated = fb`) and a constant PS.
 """
-const LIMB_FLOW = V.FlowSpec(
-    V.HEART_FLOW;
+const LIMB_FLOW = V.FlowSpec(V.HEART_FLOW;
     p_out = 11.0f0, # mmHg. Common femoral vein, supine rest, catheter (Pearson 2011)
     fb = 0.037f0, # mL/mL. Muscle 3.3 mL/100 g by PET (Raitakari 1995), fat and skin (Leggett 1991), + conduits
     fb_dilated = 0.037f0, # no measured rise under adenosine

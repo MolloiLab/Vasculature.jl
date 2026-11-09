@@ -75,10 +75,22 @@ begin
     const LEG_NRB = get(
         ENV,
         "XCAT_LEG_NRB",
-        joinpath(homedir(), "Documents", "dev", "MolloiLab", "xcat-data", "legs", "both_legs_1.nrb"),
+        joinpath(
+            homedir(),
+            "Documents",
+            "dev",
+            "MolloiLab",
+            "xcat-data",
+            "legs",
+            "both_legs_1.nrb",
+        ),
     )
     # every cached stage (pass 1, the patches, each pass-2 patch); on a cluster, a shared scratch folder
-    const CACHE_DIR = get(ENV, "LIMB_CACHE_DIR", joinpath(homedir(), "xcat-perfused", "limb_pipeline_cache"))
+    const CACHE_DIR = get(
+        ENV,
+        "LIMB_CACHE_DIR",
+        joinpath(homedir(), "xcat-perfused", "limb_pipeline_cache"),
+    )
     mkpath(CACHE_DIR)
 end;
 
@@ -121,8 +133,26 @@ XCAT's legs come as one grouped NURBS file: every surface of both legs, each a s
 
 # ╔═╡ f7984dcd-8660-4bb2-b99e-433d60b08960
 begin
-    const ENVELOPE = ["leg_right", "foot_right", "foot_right1", "foot_right2", "foot_right3", "foot_right4", "foot_right5"]
-    const BONES = ["r_femur", "r_tibia", "r_fibula", "r_patella", "r_talus", "r_calcaneus", "rpelvis1", "rpelvis2", "rpelvis3"]
+    const ENVELOPE = [
+        "leg_right",
+        "foot_right",
+        "foot_right1",
+        "foot_right2",
+        "foot_right3",
+        "foot_right4",
+        "foot_right5",
+    ]
+    const BONES = [
+        "r_femur",
+        "r_tibia",
+        "r_fibula",
+        "r_patella",
+        "r_talus",
+        "r_calcaneus",
+        "rpelvis1",
+        "rpelvis2",
+        "rpelvis3",
+    ]
     const LONG_BONES = ["r_femur", "r_tibia", "r_fibula"] # the fine blockers
     const ARTERIES = "arteries_rleg"
     const VEINS = "veins_rleg"
@@ -132,7 +162,10 @@ begin
     "Foot bones XCAT does not name by side: the right ones are told apart by x."
     side_bone(name) = startswith(name, "metatarsal") || startswith(name, "phalanx")
     "The surfaces this notebook reads."
-    wanted(name) = name in ENVELOPE || name in BONES || name in (ARTERIES, VEINS) || (side_bone(name) && !endswith(name, "_inner"))
+    wanted(name) = name in ENVELOPE ||
+        name in BONES ||
+        name in (ARTERIES, VEINS) ||
+        (side_bone(name) && !endswith(name, "_inner"))
 end;
 
 # ╔═╡ 0928ebc1-1d0b-4b61-a361-637c87839d35
@@ -150,7 +183,9 @@ function read_grouped_nrb(path::AbstractString, keep)
     seen = Dict{String, Int}()
     i = 1
     while i <= n - 4
-        if isempty(strip(L[i])) || !endswith(rstrip(L[i + 3]), ":M") || !endswith(rstrip(L[i + 4]), ":N")
+        if isempty(strip(L[i])) ||
+                !endswith(rstrip(L[i + 3]), ":M") ||
+                !endswith(rstrip(L[i + 4]), ":N")
             i += 1
             continue
         end
@@ -184,7 +219,15 @@ function read_grouped_nrb(path::AbstractString, keep)
                     P[d, jj, ii] = parse(Float64, f[d])
                 end
             end
-            push!(out, V.XCAT.NurbsSurface(k == 1 ? name : @sprintf("%s__occ%03d", name, k), u, v, P))
+            push!(
+                out,
+                V.XCAT.NurbsSurface(
+                    k == 1 ? name : @sprintf("%s__occ%03d", name, k),
+                    u,
+                    v,
+                    P,
+                ),
+            )
         end
         i += M * N
     end
@@ -225,7 +268,11 @@ md"""
 
 # ╔═╡ d57038e3-65cf-49fc-b365-1d3888b8b148
 "A NURBS surface's triangle mesh, finer for surfaces with more control points."
-mesh(s) = V.XCAT.tessellate(s; nu = clamp(4 * size(s.P, 2), 64, 480), nv = clamp(4 * size(s.P, 3), 64, 480))
+mesh(s) = V.XCAT.tessellate(
+    s;
+    nu = clamp(4 * size(s.P, 2), 64, 480),
+    nv = clamp(4 * size(s.P, 3), 64, 480),
+)
 
 # ╔═╡ 82d39e1f-f872-4449-838e-81678f93d077
 """
@@ -245,7 +292,13 @@ LEG = cached("leg") do
     fine_grid = V.grid_around(reduce(hcat, first.(long)), 0.4; margin = 2)
     fine = reduce(.|, (V.voxelize(X, T, fine_grid) for (X, T) in long))
 
-    (grid = grid, envelope = envelope, bone = bone, soft = envelope .& .!bone, blockers = (fine, fine_grid.origin, 0.4))
+    (
+        grid = grid,
+        envelope = envelope,
+        bone = bone,
+        soft = envelope .& .!bone,
+        blockers = (fine, fine_grid.origin, 0.4),
+    )
 end;
 
 # ╔═╡ d3bfa261-2daf-42e5-9bfe-4bc1d4a72f3c
@@ -270,7 +323,10 @@ const STEP = 2.8 * cbrt(SOFT_ML / 148.1)
 # ╔═╡ fa99ca18-b2a3-4a33-8cc1-54c84219aced
 "A centreline resampled every `step` mm by arc length."
 function resample(c::V.XCAT.Centerline, step::Real)
-    arc = [0.0; cumsum([sqrt(sum(abs2, c.X[:, k + 1] .- c.X[:, k])) for k in 1:(size(c.X, 2) - 1)])]
+    arc = [
+        0.0
+        cumsum([sqrt(sum(abs2, c.X[:, k + 1] .- c.X[:, k])) for k in 1:(size(c.X, 2) - 1)])
+    ]
     n = max(2, round(Int, arc[end] / step) + 1)
     X = zeros(3, n)
     r = zeros(n)
@@ -296,23 +352,35 @@ function imaged_tree(surfaces)
     lines = map(surfaces) do s
         c = V.XCAT.centerline(s; step = 1.0)
         # parametrized the other way round (u along the vessel): swap u and v
-        median(c.r) > 15 ? V.XCAT.centerline(V.XCAT.NurbsSurface(s.name, s.v, s.u, permutedims(s.P, (1, 3, 2))); step = 1.0) : c
+        median(c.r) > 15 ?
+            V.XCAT.centerline(
+                V.XCAT.NurbsSurface(s.name, s.v, s.u, permutedims(s.P, (1, 3, 2)));
+                step = 1.0,
+            ) :
+            c
     end
     top = argmax([maximum(@view l.X[3, :]) for l in lines])
     c = lines[top]
-    c.X[3, 1] < c.X[3, end] && (c = V.XCAT.Centerline(c.name, c.X[:, end:-1:1], reverse(c.r)))
+    c.X[3, 1] < c.X[3, end] &&
+        (c = V.XCAT.Centerline(c.name, c.X[:, end:-1:1], reverse(c.r)))
     k0 = findfirst(k -> inside(LEG.envelope, c.X[:, k]), axes(c.X, 2))
     lines[top] = V.XCAT.Centerline(c.name, c.X[:, k0:end], c.r[k0:end])
     r_root = mean(lines[top].r[1:min(10, end)])
     pieces = [resample(l, STEP) for l in lines]
     for tol in (3.0, 5.0, 8.0, 12.0, 20.0)
         try
-            return (tree = only(V.XCAT.base_forest(pieces; roots = [c.name], attach_tol = tol)), r_root, attach_tol = tol)
+            return (
+                tree = only(V.XCAT.base_forest(pieces; roots = [c.name], attach_tol = tol)),
+                r_root,
+                attach_tol = tol,
+            )
         catch e
             (e isa ErrorException && occursin("base_forest", e.msg)) || rethrow()
         end
     end
-    return error("the imaged $(group(c.name)) patches do not join into one tree within 20 mm")
+    return error(
+        "the imaged $(group(c.name)) patches do not join into one tree within 20 mm",
+    )
 end
 
 # ╔═╡ 4fb8cda2-0411-4a9e-a2f5-f4156b25a698
@@ -332,7 +400,13 @@ inlets = cached("inlets") do
             blockers = (LEG.bone, LEG.grid.origin, LEG.grid.h),
         )
         pass = V.XCAT.vessel_tube(tree, LEG.grid; margin = 1.5) .& .!LEG.soft .& .!LEG.bone
-        (tree = tree, report = report, r_root = base.r_root, attach_tol = base.attach_tol, pass = pass)
+        (
+            tree = tree,
+            report = report,
+            r_root = base.r_root,
+            attach_tol = base.attach_tol,
+            pass = pass,
+        )
     end
 end;
 
@@ -350,12 +424,22 @@ let a = inlets.arteries, v = inlets.veins
 
             Soft tissue %.0f mL (skin envelope %.0f mL, bone %.0f mL). Centrelines resampled every %.1f mm. XCAT's femoral artery is %.1f mm across; its femoral vein (%.1f mm) is narrower than the measured supine 13.6 ± 3.0 mm (Keiler et al. 2019).
             """,
-            a.r_root, v.r_root,
-            length(a.tree.parent), length(v.tree.parent),
-            a.report.stubs, a.report.sites, v.report.stubs, v.report.sites,
-            count(a.pass) / 1000, count(v.pass) / 1000,
-            SOFT_ML, count(LEG.envelope) / 1000, count(LEG.bone .& LEG.envelope) / 1000, STEP,
-            2a.r_root, 2v.r_root,
+            a.r_root,
+            v.r_root,
+            length(a.tree.parent),
+            length(v.tree.parent),
+            a.report.stubs,
+            a.report.sites,
+            v.report.stubs,
+            v.report.sites,
+            count(a.pass) / 1000,
+            count(v.pass) / 1000,
+            SOFT_ML,
+            count(LEG.envelope) / 1000,
+            count(LEG.bone .& LEG.envelope) / 1000,
+            STEP,
+            2a.r_root,
+            2v.r_root,
         ),
     )
 end
@@ -367,14 +451,24 @@ function leg_figure(trees; title = "", size = (900, 900))
     g = LEG.grid
     xs = [g.origin[d] .+ (0:(g.dims[d] - 1)) .* g.h for d in 1:3]
     for (column, (view, label)) in enumerate(((1, "front (x–z)"), (2, "side (y–z)")))
-        ax = Mke.Axis(fig[1, column]; title = label, aspect = Mke.DataAspect(), xlabel = view == 1 ? "x (mm)" : "y (mm)", ylabel = "z (mm)")
+        ax = Mke.Axis(
+            fig[1, column];
+            title = label,
+            aspect = Mke.DataAspect(),
+            xlabel = view == 1 ? "x (mm)" : "y (mm)",
+            ylabel = "z (mm)",
+        )
         silhouette = dropdims(any(LEG.soft; dims = 3 - view); dims = 3 - view)
         Mke.heatmap!(ax, xs[view], xs[3], silhouette; colormap = [:white, :gray88])
         for (segments, colour, scale) in trees
             a, b, r = segments
             points = Mke.Point2f[]
             for j in eachindex(r)
-                push!(points, Mke.Point2f(a[view, j], a[3, j]), Mke.Point2f(b[view, j], b[3, j]))
+                push!(
+                    points,
+                    Mke.Point2f(a[view, j], a[3, j]),
+                    Mke.Point2f(b[view, j], b[3, j]),
+                )
             end
             widths = repeat(max.(0.4, scale .* r); inner = 2)
             Mke.linesegments!(ax, points; color = colour, linewidth = widths)
@@ -394,7 +488,10 @@ end
 
 # ╔═╡ 826f47f1-d661-4ae1-83e7-a6a0fe1c1e62
 leg_figure(
-    [(base_segments(inlets.veins.tree), :royalblue, 0.6), (base_segments(inlets.arteries.tree), :firebrick, 0.6)];
+    [
+        (base_segments(inlets.veins.tree), :royalblue, 0.6),
+        (base_segments(inlets.arteries.tree), :firebrick, 0.6),
+    ];
     title = "Imaged arteries (red) and veins (blue), with their penetrating stubs",
 )
 
@@ -495,7 +592,11 @@ function grow_tree(spec, inlet, tissue, pass, grid, blockers, name)
     dir = mktempdir()
     allow = zeros(UInt16, size(tissue))
     allow[pass] .= V.NOTERM
-    domain = V.write_vol(joinpath(dir, "$name.vol"), tissue .| pass, Tuple(round.(Int, grid.origin ./ grid.h)))
+    domain = V.write_vol(
+        joinpath(dir, "$name.vol"),
+        tissue .| pass,
+        Tuple(round.(Int, grid.origin ./ grid.h)),
+    )
     gxl = V.XCAT.write_base_gxl(joinpath(dir, "$name.xml"), inlet)
     seconds = @elapsed engine = V.grow(spec, domain, [gxl]; blockers, territories = allow)
     return (tree = V.vtree(engine), seconds = seconds)
@@ -519,16 +620,22 @@ end
 
 # ╔═╡ 849eebe7-c721-44ca-b04b-8b75316b95be
 let row(name, grown) = (
-        t = grown.tree;
-        ends = terminals(t);
-        r = 1000 .* t.r[ends];
-        @sprintf(
-            "| %s | %d | %d | %.0f µm (%.0f–%.0f) | %.0f µm | %.1f s |",
-            name, length(t.r), length(ends), median(r), quantile(r, 0.05), quantile(r, 0.95),
-            1000 * inlets[name].r_root * length(ends)^(-1 / GAMMA), grown.seconds,
-        )
-    ),
-        rows = [row(name, grown) for (name, grown) in pairs(pass1)]
+    t = grown.tree;
+    ends = terminals(t);
+    r = 1000 .* t.r[ends];
+    @sprintf(
+        "| %s | %d | %d | %.0f µm (%.0f–%.0f) | %.0f µm | %.1f s |",
+        name,
+        length(t.r),
+        length(ends),
+        median(r),
+        quantile(r, 0.05),
+        quantile(r, 0.95),
+        1000 * inlets[name].r_root * length(ends)^(-1 / GAMMA),
+        grown.seconds,
+    )
+),
+    rows = [row(name, grown) for (name, grown) in pairs(pass1)]
     Markdown.parse(
         """
         | tree | segments | terminals | terminal radius, median (5–95%) | Murray: r\\_root · N^(-1/3) | growth |
@@ -543,7 +650,10 @@ end
 # ╔═╡ dd3a7c54-c5ed-4139-9211-411c81f568f4
 let segments(t) = (t.a, t.b, t.r)
     leg_figure(
-        [(segments(pass1.veins.tree), (:royalblue, 0.6), 0.6), (segments(pass1.arteries.tree), (:firebrick, 0.8), 0.6)];
+        [
+            (segments(pass1.veins.tree), (:royalblue, 0.6), 0.6),
+            (segments(pass1.arteries.tree), (:firebrick, 0.8), 0.6),
+        ];
         title = "Pass 1: arteries (red) and veins (blue), one terminal per 10 mL patch",
     )
 end
@@ -566,7 +676,9 @@ function flood(mask, grid, points)
     label = zeros(Int32, size(mask))
     queue = CartesianIndex{3}[]
     for (k, p) in enumerate(eachcol(points))
-        c = CartesianIndex(Tuple(clamp.(round.(Int, (p .- grid.origin) ./ grid.h) .+ 1, 1, size(mask))))
+        c = CartesianIndex(Tuple(
+            clamp.(round.(Int, (p .- grid.origin) ./ grid.h) .+ 1, 1, size(mask)),
+        ))
         mask[c] && label[c] == 0 || continue
         label[c] = k
         push!(queue, c)
@@ -617,20 +729,38 @@ let ml = PATCHES.voxels ./ 1000
             | patch volume, median (5–95%%) | %.1f mL (%.1f–%.1f) |
             | soft tissue in a patch | %.1f%% |
             """,
-            length(ml), seeded, median(ml[ml .> 0]), quantile(ml[ml .> 0], 0.05), quantile(ml[ml .> 0], 0.95),
+            length(ml),
+            seeded,
+            median(ml[ml .> 0]),
+            quantile(ml[ml .> 0], 0.05),
+            quantile(ml[ml .> 0], 0.95),
             100 * sum(PATCHES.voxels) / count(LEG.soft),
         ),
     )
 end
 
 # ╔═╡ dd46fe50-0a2e-41cd-a507-bceab8d0e381
-let g = LEG.grid, j = round(Int, (mean(pass1.arteries.tree.b[2, :]) - g.origin[2]) / g.h) + 1
+let g = LEG.grid,
+    j = round(Int, (mean(pass1.arteries.tree.b[2, :]) - g.origin[2]) / g.h) + 1
     fig = Mke.Figure(size = (700, 900))
-    ax = Mke.Axis(fig[1, 1]; title = "Patches, coronal slice at y = $(round(Int, g.origin[2] + (j - 1) * g.h)) mm", aspect = Mke.DataAspect(), xlabel = "x (mm)", ylabel = "z (mm)")
+    ax = Mke.Axis(
+        fig[1, 1];
+        title = "Patches, coronal slice at y = $(round(Int, g.origin[2] + (j - 1) * g.h)) mm",
+        aspect = Mke.DataAspect(),
+        xlabel = "x (mm)",
+        ylabel = "z (mm)",
+    )
     slice = Float32.(PATCHES.label[:, j, :])
     colour = Float32.(mod.(slice .* 0.6180339f0, 1.0f0))
     colour[slice .== 0] .= NaN32
-    Mke.heatmap!(ax, g.origin[1] .+ (0:(g.dims[1] - 1)) .* g.h, g.origin[3] .+ (0:(g.dims[3] - 1)) .* g.h, colour; colormap = :tab20, nan_color = :white)
+    Mke.heatmap!(
+        ax,
+        g.origin[1] .+ (0:(g.dims[1] - 1)) .* g.h,
+        g.origin[3] .+ (0:(g.dims[3] - 1)) .* g.h,
+        colour;
+        colormap = :tab20,
+        nan_color = :white,
+    )
     fig
 end
 
@@ -655,7 +785,8 @@ function walk(parent)
     for j in eachindex(parent)
         parent[j] == 0 ? push!(order, j) : push!(children[parent[j]], j)
     end
-    for j in order # `order` grows as it is read
+    for j in order
+        # `order` grows as it is read
         append!(order, children[j])
     end
     return order, children
@@ -686,9 +817,10 @@ const PATCH_TERMINALS = round.(Int, N_TOTAL .* PATCHES.voxels ./ sum(PATCHES.vox
 The pass-1 arteries at their Murray radii: each segment's final terminal count below it (`below`) and its radius
 `TERMINAL_RADIUS_MM · below^(1/γ)` (mm). A pass-1 terminal counts its patch's terminals (at least one).
 """
-PASS1_MURRAY = let t = pass1.arteries.tree, patch_of = Dict(j => k for (k, j) in enumerate(PATCHES.segment))
+PASS1_MURRAY = let t = pass1.arteries.tree,
+    patch_of = Dict(j => k for (k, j) in enumerate(PATCHES.segment))
     _, _, below = downstream(t.parent, j -> max(PATCH_TERMINALS[patch_of[j]], 1))
-    (below = below, radius = TERMINAL_RADIUS_MM .* below .^ (1 / GAMMA))
+    (below = below, radius = TERMINAL_RADIUS_MM .* below.^(1 / GAMMA))
 end;
 
 # ╔═╡ 59b8c1c5-e00d-4e74-901c-1ac10ddf5f87
@@ -705,10 +837,17 @@ let t = pass1.arteries.tree, ends = PATCHES.segment, root = findfirst(==(0), t.p
             | pass-1 terminals at their Murray radius, median (5–95%%) | %.0f µm (%.0f–%.0f) |
             | every pass-1 vessel: Murray ÷ grown, median (5–95%%) | %.2f (%.2f–%.2f) |
             """,
-            inlets.arteries.r_root, PASS1_MURRAY.radius[root],
-            median(µm(t.r[ends])), quantile(µm(t.r[ends]), 0.05), quantile(µm(t.r[ends]), 0.95),
-            median(µm(PASS1_MURRAY.radius[ends])), quantile(µm(PASS1_MURRAY.radius[ends]), 0.05), quantile(µm(PASS1_MURRAY.radius[ends]), 0.95),
-            median(ratio), quantile(ratio, 0.05), quantile(ratio, 0.95),
+            inlets.arteries.r_root,
+            PASS1_MURRAY.radius[root],
+            median(µm(t.r[ends])),
+            quantile(µm(t.r[ends]), 0.05),
+            quantile(µm(t.r[ends]), 0.95),
+            median(µm(PASS1_MURRAY.radius[ends])),
+            quantile(µm(PASS1_MURRAY.radius[ends]), 0.05),
+            quantile(µm(PASS1_MURRAY.radius[ends]), 0.95),
+            median(ratio),
+            quantile(ratio, 0.05),
+            quantile(ratio, 0.95),
         ),
     )
 end
@@ -763,11 +902,27 @@ function grow_patch(k; tree = pass1.arteries.tree)
     soft = LEG.soft[box]
     margin = dilate(tissue, round(Int, PATCH_MARGIN_MM / g.h)) .& soft .& .!tissue
     inlet = V.XCAT.BaseTree("patch_$k", [0, 1], hcat(a, b), [r, r], ["pass1", "pass1"])
-    pass = (V.XCAT.vessel_tube(inlet, grid; margin = 1.5) .& .!LEG.bone[box] .| margin) .& .!tissue
+    pass = (V.XCAT.vessel_tube(inlet, grid; margin = 1.5) .& .!LEG.bone[box] .| margin) .&
+        .!tissue
     ml = count(tissue) / 1000
     nterm = PATCH_TERMINALS[k]
-    grown = grow_tree(limb_growth(nterm, ml, r), inlet, tissue, pass, grid, LEG.blockers, "patch_$k")
-    return (tree = grown.tree, seconds = grown.seconds, nterm = nterm, ml = ml, root_radius = r, segment = j)
+    grown = grow_tree(
+        limb_growth(nterm, ml, r),
+        inlet,
+        tissue,
+        pass,
+        grid,
+        LEG.blockers,
+        "patch_$k",
+    )
+    return (
+        tree = grown.tree,
+        seconds = grown.seconds,
+        nterm = nterm,
+        ml = ml,
+        root_radius = r,
+        segment = j,
+    )
 end
 
 # ╔═╡ b57241e2-449d-4e78-b18e-44d5b6bc793d
@@ -786,7 +941,14 @@ REGION = let t = pass1.arteries.tree, z = t.b[3, PATCHES.segment]
         end
         return j == branch
     end
-    (branch = branch, patches = [k for (k, j) in enumerate(PATCHES.segment) if under(j) && PATCHES.voxels[k] > 0])
+    (
+        branch = branch,
+        patches = [
+            k
+            for (k, j) in enumerate(PATCHES.segment)
+            if under(j) && PATCHES.voxels[k] > 0
+        ],
+    )
 end
 
 # ╔═╡ 78ceb802-8b99-480e-9767-bd24ca40f15b
@@ -794,7 +956,8 @@ end
 pass2 = [
     cached("patch_$k") do
         grow_patch(k)
-    end for k in REGION.patches
+    end
+    for k in REGION.patches
 ];
 
 # ╔═╡ 2bdfc5d1-1351-4b5a-b678-90995faf4dd1
@@ -829,8 +992,12 @@ function stitch(tree, radius, grown)
         n += length(t.r)
     end
     return (
-        parent = parent, a = reduce(hcat, a), b = reduce(hcat, b), r = reduce(vcat, r),
-        pass = reduce(vcat, pass), from = reduce(vcat, from),
+        parent = parent,
+        a = reduce(hcat, a),
+        b = reduce(hcat, b),
+        r = reduce(vcat, r),
+        pass = reduce(vcat, pass),
+        from = reduce(vcat, from),
     )
 end
 
@@ -841,7 +1008,9 @@ stitched = stitch(pass1.arteries.tree, PASS1_MURRAY.radius, pass2);
 # ╔═╡ e5c89aca-c566-48d4-9ccf-59bbb4ca9e8b
 "The final terminals a terminal of `stitched` stands for: one if it was grown in pass 2, its patch's count if not."
 terminal_weight = let patch_of = Dict(j => k for (k, j) in enumerate(PATCHES.segment))
-    j -> stitched.pass[j] == 2 ? 1.0 : Float64(max(PATCH_TERMINALS[patch_of[stitched.from[j]]], 1))
+    j -> stitched.pass[j] == 2 ?
+        1.0 :
+        Float64(max(PATCH_TERMINALS[patch_of[stitched.from[j]]], 1))
 end
 
 # ╔═╡ 5b657f30-24f2-4481-88c0-1c23e8732280
@@ -865,40 +1034,93 @@ let fig = Mke.Figure(size = (1500, 860)), t = stitched, g = LEG.grid
     within(j, lo, hi) = lo[1] <= t.b[1, j] <= hi[1] && lo[3] <= t.b[3, j] <= hi[3]
     function draw!(ax, segments; colour = nothing, scale = 1.0)
         isempty(segments) && return
-        segments = segments[sortperm(t.r[segments])] # thin first, so thick vessels lie on top
+        segments = segments[sortperm(t.r[
+            segments,
+        ])] # thin first, so thick vessels lie on top
         points = Mke.Point2f[]
         for j in segments
-            push!(points, Mke.Point2f(t.a[1, j], t.a[3, j]), Mke.Point2f(t.b[1, j], t.b[3, j]))
+            push!(
+                points,
+                Mke.Point2f(t.a[1, j], t.a[3, j]),
+                Mke.Point2f(t.b[1, j], t.b[3, j]),
+            )
         end
         return Mke.linesegments!(
-            ax, points; color = colour === nothing ? repeat(log10.(1000 .* t.r[segments]); inner = 2) : colour,
-            colormap = :viridis, colorrange = (1, 3.6), linewidth = repeat(max.(0.4, scale .* t.r[segments]); inner = 2),
+            ax,
+            points;
+            color = colour === nothing ?
+                repeat(log10.(1000 .* t.r[segments]); inner = 2) :
+                colour,
+            colormap = :viridis,
+            colorrange = (1, 3.6),
+            linewidth = repeat(max.(0.4, scale .* t.r[segments]); inner = 2),
         )
     end
     xs = [g.origin[d] .+ (0:(g.dims[d] - 1)) .* g.h for d in 1:3]
     silhouette = dropdims(any(LEG.soft; dims = 2); dims = 2)
-    outline!(ax, lo, hi) = Mke.lines!(ax, [lo[1], hi[1], hi[1], lo[1], lo[1]], [lo[3], lo[3], hi[3], hi[3], lo[3]]; color = :black, linewidth = 1.5)
+    outline!(ax, lo, hi) = Mke.lines!(
+        ax,
+        [lo[1], hi[1], hi[1], lo[1], lo[1]],
+        [lo[3], lo[3], hi[3], hi[3], lo[3]];
+        color = :black,
+        linewidth = 1.5,
+    )
 
     # 1. the leg: pass 1, the path to the region, the region's box
-    leg = Mke.Axis(fig[1, 1]; title = "The leg", aspect = Mke.DataAspect(), xlabel = "x (mm)", ylabel = "z (mm)")
+    leg = Mke.Axis(
+        fig[1, 1];
+        title = "The leg",
+        aspect = Mke.DataAspect(),
+        xlabel = "x (mm)",
+        ylabel = "z (mm)",
+    )
     Mke.heatmap!(leg, xs[1], xs[3], silhouette; colormap = [:white, :gray92])
     draw!(leg, findall(==(1), t.pass); colour = :gray55, scale = 2.0)
     draw!(leg, path; colour = :firebrick, scale = 2.0)
     outline!(leg, box_lo, box_hi)
 
     # 2. the region and 10 mm around it: pass 1 nearby in grey, the region's vessels of 20 µm or more in colour
-    zoom = Mke.Axis(fig[1, 2]; title = "The region: $(length(pass2)) patches stitched to pass 1 (vessels ≥ 20 µm)", aspect = Mke.DataAspect(), xlabel = "x (mm)", ylabel = "z (mm)")
+    zoom = Mke.Axis(
+        fig[1, 2];
+        title = "The region: $(length(pass2)) patches stitched to pass 1 (vessels ≥ 20 µm)",
+        aspect = Mke.DataAspect(),
+        xlabel = "x (mm)",
+        ylabel = "z (mm)",
+    )
     Mke.heatmap!(zoom, xs[1], xs[3], silhouette; colormap = [:white, :gray92])
-    draw!(zoom, filter(j -> t.pass[j] == 1 && within(j, box_lo .- 20, box_hi .+ 20), eachindex(t.r)); colour = :gray60, scale = 6.0)
+    draw!(
+        zoom,
+        filter(
+            j -> t.pass[j] == 1 && within(j, box_lo .- 20, box_hi .+ 20),
+            eachindex(t.r),
+        );
+        colour = :gray60,
+        scale = 6.0,
+    )
     draw!(zoom, [path; filter(j -> t.r[j] >= 0.02f0, region)]; scale = 6.0)
     outline!(zoom, detail_lo, detail_hi)
     Mke.limits!(zoom, box_lo[1], box_hi[1], box_lo[3], box_hi[3])
 
     # 3. 8 mm at the region's middle: every vessel, down to the 10 µm terminals
-    detail = Mke.Axis(fig[1, 3]; title = "8 mm detail: every vessel, down to 10 µm", aspect = Mke.DataAspect(), xlabel = "x (mm)", ylabel = "z (mm)")
-    draw!(detail, filter(j -> within(j, detail_lo .- 2, detail_hi .+ 2), region); scale = 40.0)
+    detail = Mke.Axis(
+        fig[1, 3];
+        title = "8 mm detail: every vessel, down to 10 µm",
+        aspect = Mke.DataAspect(),
+        xlabel = "x (mm)",
+        ylabel = "z (mm)",
+    )
+    draw!(
+        detail,
+        filter(j -> within(j, detail_lo .- 2, detail_hi .+ 2), region);
+        scale = 40.0,
+    )
     Mke.limits!(detail, detail_lo[1], detail_hi[1], detail_lo[3], detail_hi[3])
-    Mke.Colorbar(fig[1, 4]; colormap = :viridis, limits = (1, 3.6), label = "log₁₀ radius (µm)")
+    Mke.Colorbar(
+        fig[1, 4];
+        colormap = :viridis,
+        limits = (1, 3.6),
+        label = "log₁₀ radius (µm)",
+    )
     Mke.colsize!(fig.layout, 1, Mke.Relative(0.16))
     Mke.colgap!(fig.layout, 1, 60)
     Mke.colgap!(fig.layout, 2, 60)
@@ -907,9 +1129,20 @@ let fig = Mke.Figure(size = (1500, 860)), t = stitched, g = LEG.grid
     # on a scene made after the axes so they are drawn over them
     overlay = Mke.Scene(fig.scene; clear = false, camera = Mke.campixel!)
     function connect!(from, lo, hi, to)
-        points = Mke.lift(from.scene.viewport, from.finallimits, to.scene.viewport) do vf, lf, vt
-            pixel(x, z) = Mke.Point2f(vf.origin .+ (Mke.Point2f(x, z) .- lf.origin) ./ lf.widths .* vf.widths)
-            [pixel(hi[1], hi[3]), Mke.Point2f(vt.origin[1], vt.origin[2] + vt.widths[2]), pixel(hi[1], lo[3]), Mke.Point2f(vt.origin...)]
+        points = Mke.lift(
+            from.scene.viewport,
+            from.finallimits,
+            to.scene.viewport,
+        ) do vf, lf, vt
+            pixel(x, z) = Mke.Point2f(
+                vf.origin .+ (Mke.Point2f(x, z) .- lf.origin) ./ lf.widths .* vf.widths,
+            )
+            [
+                pixel(hi[1], hi[3]),
+                Mke.Point2f(vt.origin[1], vt.origin[2] + vt.widths[2]),
+                pixel(hi[1], lo[3]),
+                Mke.Point2f(vt.origin...),
+            ]
         end
         return Mke.linesegments!(overlay, points; color = :gray30, linewidth = 1)
     end
@@ -923,27 +1156,60 @@ end
 # together; the line is r = 10 µm · n^(1/3)
 let fig = Mke.Figure(size = (760, 560)), t = stitched
     _, _, n = downstream(t.parent, terminal_weight)
-    ax = Mke.Axis(fig[1, 1]; xscale = log10, yscale = log10, xlabel = "terminals downstream", ylabel = "radius (µm)", title = "One Murray tree from the femoral artery to 10 µm")
+    ax = Mke.Axis(
+        fig[1, 1];
+        xscale = log10,
+        yscale = log10,
+        xlabel = "terminals downstream",
+        ylabel = "radius (µm)",
+        title = "One Murray tree from the femoral artery to 10 µm",
+    )
     grown = findall(==(2), t.pass)
     keep = grown[1:max(1, length(grown) ÷ 40000):end]
-    Mke.scatter!(ax, n[keep], 1000 .* t.r[keep]; markersize = 2, color = (:seagreen, 0.3), label = "pass 2 (the region)")
+    Mke.scatter!(
+        ax,
+        n[keep],
+        1000 .* t.r[keep];
+        markersize = 2,
+        color = (:seagreen, 0.3),
+        label = "pass 2 (the region)",
+    )
     first_pass = findall(==(1), t.pass)
-    Mke.scatter!(ax, n[first_pass], 1000 .* t.r[first_pass]; markersize = 4, color = (:firebrick, 0.6), label = "pass 1")
-    line = 10.0 .^ range(0, log10(N_TOTAL), length = 50)
-    Mke.lines!(ax, line, 1000TERMINAL_RADIUS_MM .* line .^ (1 / GAMMA); color = :black, label = "r = 10 µm · n^(1/3)")
+    Mke.scatter!(
+        ax,
+        n[first_pass],
+        1000 .* t.r[first_pass];
+        markersize = 4,
+        color = (:firebrick, 0.6),
+        label = "pass 1",
+    )
+    line = 10.0.^range(0, log10(N_TOTAL), length = 50)
+    Mke.lines!(
+        ax,
+        line,
+        1000TERMINAL_RADIUS_MM .* line.^(1 / GAMMA);
+        color = :black,
+        label = "r = 10 µm · n^(1/3)",
+    )
     Mke.axislegend(ax; position = :lt)
     fig
 end
 
 # ╔═╡ cc1cfb89-1c01-4fe9-ba4a-0abe7041e4ec
-let seconds_per_terminal = sum(p.seconds for p in pass2) / sum(p.nterm for p in pass2), segments = 2N_TOTAL
+let seconds_per_terminal = sum(p.seconds for p in pass2) / sum(p.nterm for p in pass2),
+    segments = 2N_TOTAL
     Markdown.parse(
         @sprintf(
             """
             **The full pass 2, from this region.** %.0f µs of growth per terminal, so the %d patches (%.1f million terminals) take about **%.1f hours** one after another on this machine, or about %.0f minutes spread over 40 GPUs. The arterial tree holds about %.0f million segments, %.1f GB at 40 bytes a segment; the veins as many again.
             """,
-            1.0e6seconds_per_terminal, N_PASS1, N_TOTAL / 1.0e6, seconds_per_terminal * N_TOTAL / 3600,
-            seconds_per_terminal * N_TOTAL / 60 / 40, segments / 1.0e6, 40 * segments / 1.0e9,
+            1.0e6seconds_per_terminal,
+            N_PASS1,
+            N_TOTAL / 1.0e6,
+            seconds_per_terminal * N_TOTAL / 3600,
+            seconds_per_terminal * N_TOTAL / 60 / 40,
+            segments / 1.0e6,
+            40 * segments / 1.0e9,
         ),
     )
 end
@@ -972,8 +1238,7 @@ The leg's flow physiology: the fields that differ from the heart's, each with it
 as a preset once its sources are in `test/reference/`, as every preset's are. The heart-only fields take the leg's
 no-change values: no measured blood-volume rise under adenosine (`fb_dilated = fb`) and a constant PS.
 """
-const LIMB_FLOW = V.FlowSpec(
-    V.HEART_FLOW;
+const LIMB_FLOW = V.FlowSpec(V.HEART_FLOW;
     p_out = 11.0f0, # mmHg. Common femoral vein, supine rest, catheter (Pearson 2011)
     fb = 0.037f0, # mL/mL. Muscle 3.3 mL/100 g by PET (Raitakari 1995), fat and skin (Leggett 1991), + conduits
     fb_dilated = 0.037f0, # no measured rise under adenosine
@@ -1007,7 +1272,13 @@ function pressure_drop(tree, q, weight; phys = LIMB_FLOW)
     for j in order
         L = Float32(sqrt(sum(abs2, tree.b[:, j] .- tree.a[:, j])))
         r = tree.r[j]
-        drop = V.Flow.poiseuille(L, r, phys.plasma_viscosity_mPas * V.Flow.mu_rel(2000 * r, phys.hd)) * unit * n[j]
+        drop = V.Flow.poiseuille(
+            L,
+            r,
+            phys.plasma_viscosity_mPas * V.Flow.mu_rel(2000 * r, phys.hd),
+        ) *
+            unit *
+            n[j]
         P[j] = (tree.parent[j] == 0 ? 0.0 : P[tree.parent[j]]) + drop
     end
     ends = findall(isempty, children)
@@ -1015,12 +1286,21 @@ function pressure_drop(tree, q, weight; phys = LIMB_FLOW)
 end
 
 # ╔═╡ 45930316-b6ba-4992-b30b-ead047135d61
-let f = LIMB_FLOW, q_max = LIMB_FLOW.p_in / LIMB_FLOW.r_total_dilated * LIMB_FLOW.rho * SOFT_ML # mL/min, the whole leg dilated
+let f = LIMB_FLOW,
+    q_max = LIMB_FLOW.p_in / LIMB_FLOW.r_total_dilated * LIMB_FLOW.rho * SOFT_ML
+    # mL/min, the whole leg dilated
     rows = map(zip(REGION.patches, pass2)) do (k, p)
         r = 1000 .* p.tree.r[terminals(p.tree)]
         @sprintf(
             "| %d | %.1f mL | %.0f µm | %d | %.1f µm (%.1f–%.1f) | %.0f s |",
-            k, p.ml, 1000p.root_radius, p.nterm, median(r), quantile(r, 0.05), quantile(r, 0.95), p.seconds,
+            k,
+            p.ml,
+            1000p.root_radius,
+            p.nterm,
+            median(r),
+            quantile(r, 0.05),
+            quantile(r, 0.95),
+            p.seconds,
         )
     end
     loss = pressure_drop(stitched, q_max, terminal_weight)
@@ -1035,15 +1315,24 @@ let f = LIMB_FLOW, q_max = LIMB_FLOW.p_in / LIMB_FLOW.r_total_dilated * LIMB_FLO
             The region: %d patches, %.1f mL, %.2f million terminals, %.1f million segments, grown in %.0f s. At maximal flow (%.1f L/min for the whole leg), the pressure lost from the femoral artery to the region's 10 µm terminals is %.0f mmHg (median; 95%%: %.0f), which leaves the capillaries %.0f mmHg of the %.0f mmHg arterial pressure, above the femoral vein's %.0f mmHg.
             """,
             join(rows, "\n"),
-            length(pass2), sum(p.ml for p in pass2), sum(p.nterm for p in pass2) / 1.0e6,
-            count(==(2), stitched.pass) / 1.0e6, sum(p.seconds for p in pass2),
-            q_max / 1000, median(grown), quantile(grown, 0.95), f.p_in - median(grown), f.p_in, f.p_out,
+            length(pass2),
+            sum(p.ml for p in pass2),
+            sum(p.nterm for p in pass2) / 1.0e6,
+            count(==(2), stitched.pass) / 1.0e6,
+            sum(p.seconds for p in pass2),
+            q_max / 1000,
+            median(grown),
+            quantile(grown, 0.95),
+            f.p_in - median(grown),
+            f.p_in,
+            f.p_out,
         ),
     )
 end
 
 # ╔═╡ 04cb85af-10a2-46b7-b415-f5879a214023
-let f = LIMB_FLOW, content = 1.34 * f.hb / 100 * f.sao2 # mL O2 per mL blood
+let f = LIMB_FLOW, content = 1.34 * f.hb / 100 * f.sao2
+    # mL O2 per mL blood
     rest = f.mvo2 / (content * f.oef) # mL/min/g
     maximal = f.p_in / f.r_total_dilated
     mass = f.rho * SOFT_ML
@@ -1062,9 +1351,17 @@ let f = LIMB_FLOW, content = 1.34 * f.hb / 100 * f.sao2 # mL O2 per mL blood
 
             The resting transit is long: at rest a leg holds iodine for over a minute, so very little leaves between two volume scans a few seconds apart. Under adenosine it is about %.0f s, and venous outflow matters as it did for the heart at stress.
             """,
-            rest, rest * mass, mass, f.mvo2 * mass, maximal, maximal * mass / 1000, maximal / rest,
-            1 - exp(-f.ps / fp(rest)), 1 - exp(-f.ps / fp(maximal)),
-            60 * f.fb / (rest * f.rho), 60 * f.fb / (maximal * f.rho),
+            rest,
+            rest * mass,
+            mass,
+            f.mvo2 * mass,
+            maximal,
+            maximal * mass / 1000,
+            maximal / rest,
+            1 - exp(-f.ps / fp(rest)),
+            1 - exp(-f.ps / fp(maximal)),
+            60 * f.fb / (rest * f.rho),
+            60 * f.fb / (maximal * f.rho),
         ),
     )
 end
@@ -1135,7 +1432,6 @@ md"""
 6. **Transport**: the peripheral bed's share of the cardiac output from the grown leg's flow, then the injection with the femoral AIF.
 7. **Compartments and a phantom slab**, then idealized first-pass perfusion against ground truth, as for the heart and lungs.
 """
-
 
 # ╔═╡ Cell order:
 # ╟─2d88882b-057d-4f1d-a810-03f14c411fae

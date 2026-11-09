@@ -41,7 +41,10 @@ function TransportSpec(; kwargs...)
     isempty(miss) || throw(ArgumentError("TransportSpec: no value for $(collect(miss))"))
     return TransportSpec((kwargs[f] for f in fieldnames(TransportSpec))...)
 end
-TransportSpec(s::TransportSpec; kwargs...) = TransportSpec(; merge((; (f => getfield(s, f) for f in fieldnames(TransportSpec))...), values(kwargs))...)
+TransportSpec(s::TransportSpec; kwargs...) = TransportSpec(; merge(
+    (; (f => getfield(s, f) for f in fieldnames(TransportSpec))...),
+    values(kwargs),
+)...)
 
 """
     circulation(spec::TransportSpec) -> Body.Circulation
@@ -50,13 +53,33 @@ The whole-body circulation (`Body.human_circulation`) with the organ's own value
 blood everywhere.
 """
 function circulation(s::TransportSpec)
-    s.bed in ORGAN_SLOTS || throw(ArgumentError("TransportSpec: bed must be a body organ slot $(ORGAN_SLOTS), got :$(s.bed)"))
-    (s.bed === :coronary && s.coronary !== nothing) && throw(ArgumentError("TransportSpec: the organ is the coronary bed; do not also pass `coronary`"))
-    s.coronary === nothing && s.bed !== :coronary && throw(ArgumentError("TransportSpec: the body needs its coronary bed: pass `coronary` when the organ is not the heart"))
+    s.bed in ORGAN_SLOTS ||
+        throw(ArgumentError(
+            "TransportSpec: bed must be a body organ slot $(ORGAN_SLOTS), got :$(s.bed)",
+        ))
+    (s.bed === :coronary && s.coronary !== nothing) &&
+        throw(ArgumentError(
+            "TransportSpec: the organ is the coronary bed; do not also pass `coronary`",
+        ))
+    s.coronary === nothing &&
+        s.bed !== :coronary &&
+        throw(ArgumentError(
+            "TransportSpec: the body needs its coronary bed: pass `coronary` when the organ is not the heart",
+        ))
     organ = (; ml = s.tissue_ml, s.phys.fb, s.phys.ve, s.phys.ps, s.phys.rho)
-    beds = merge((; coronary = s.coronary), NamedTuple{(s.bed,)}((organ,))) # the organ takes its own segment
-    BC = human_circulation(; co = s.co, beat = s.beat, hct = s.phys.hd, f_cor = s.f_coronary, beds...)
-    any(sg -> sg.name === s.input, BC.segs) || throw(ArgumentError("TransportSpec: input :$(s.input) is not a body segment"))
+    beds = merge(
+        (; coronary = s.coronary),
+        NamedTuple{(s.bed,)}((organ,)),
+    ) # the organ takes its own segment
+    BC = human_circulation(;
+        co = s.co,
+        beat = s.beat,
+        hct = s.phys.hd,
+        f_cor = s.f_coronary,
+        beds...,
+    )
+    any(sg -> sg.name === s.input, BC.segs) ||
+        throw(ArgumentError("TransportSpec: input :$(s.input) is not a body segment"))
     return BC
 end
 
@@ -67,7 +90,13 @@ Iodine everywhere in the body over time for one injection (dose, rate, saline fl
 concentration of every segment (`out`), the mean blood and interstitial concentrations of every bed (`mean`, `ecv`), and
 the iodine injected, held and excreted by the kidneys.
 """
-transport(s::TransportSpec, inj::Injection = Injection()) = simulate(circulation(s), inj; tmax = s.tmax, dt = s.dt, every = s.every)
+transport(s::TransportSpec, inj::Injection = Injection()) = simulate(
+    circulation(s),
+    inj;
+    tmax = s.tmax,
+    dt = s.dt,
+    every = s.every,
+)
 
 using .Flow: Circuit, InputCurve, frame_masses, sinus_outflow
 
@@ -83,11 +112,22 @@ coronary_share(C::Circuit, co) = Float32(organ_flow(C) / co)
 
 The flow (mL/s) into the grown circuit `C`: the sum of its roots' flows.
 """
-organ_flow(C::Circuit) = Float32(sum(C.q[j] for j in eachindex(C.tree.parent) if C.tree.parent[j] == 0))
+organ_flow(C::Circuit) = Float32(sum(
+    C.q[j]
+    for j in eachindex(C.tree.parent)
+    if C.tree.parent[j] == 0
+))
 
 # Linear interpolation of samples y at times ts, held flat outside.
-_interp(t, ts, y) = t <= ts[1] ? y[1] : t >= ts[end] ? y[end] :
-    (k = searchsortedlast(ts, t); w = (t - ts[k]) / (ts[k + 1] - ts[k]); y[k] + w * (y[k + 1] - y[k]))
+_interp(t, ts, y) = t <= ts[1] ?
+    y[1] :
+    t >= ts[end] ?
+        y[end] :
+        (
+            k = searchsortedlast(ts, t);
+            w = (t - ts[k]) / (ts[k + 1] - ts[k]);
+            y[k] + w * (y[k + 1] - y[k])
+        )
 
 """
     transport(spec::TransportSpec, C::Circuit, injection = Injection(); passes = 10, tol = 1e-3, fine = 0.02, dt_out = 0.1,
@@ -109,27 +149,56 @@ plasma input curve, its venous plasma outflow concentration every `dt_out` s, th
 capillary bed at `times` (host arrays), the passes run and the last pass's weighted relative change.
 """
 function transport(
-        s::TransportSpec, C::Circuit, inj::Injection = Injection(); passes::Integer = 10, tol::Real = 1.0f-3, fine::Real = 0.02f0, dt_out::Real = 0.1f0,
-        times = 0.0f0:1.0f0:60.0f0, to = identity
-    )
+    s::TransportSpec,
+    C::Circuit,
+    inj::Injection = Injection();
+    passes::Integer = 10,
+    tol::Real = 1.0f-3,
+    fine::Real = 0.02f0,
+    dt_out::Real = 0.1f0,
+    times = 0.0f0:1.0f0:60.0f0,
+    to = identity,
+)
     s.bed === :coronary && (s = TransportSpec(s; f_coronary = coronary_share(C, s.co)))
-    BC = circulation(s); pf = 1 - s.phys.hd
+    BC = circulation(s)
+    pf = 1 - s.phys.hd
     # an organ in the central path carries the whole output: the output is its own solved flow
     if BC.segs[findfirst(x -> x.name === s.bed, BC.segs)].kind === :central
-        s = TransportSpec(s; co = organ_flow(C)); BC = circulation(s)
+        s = TransportSpec(s; co = organ_flow(C))
+        BC = circulation(s)
     end
-    fine = Float32(fine); dt_out = Float32(dt_out)
+    fine = Float32(fine)
+    dt_out = Float32(dt_out)
     r = simulate(BC, inj; tmax = s.tmax, dt = s.dt, every = s.every)
-    curve_in(r) = InputCurve(Float32[_interp(t, r.t, r.out[s.input]) / pf for t in collect(0.0f0:fine:s.tmax)], fine) # plasma
-    tc = collect(0.0f0:dt_out:s.tmax); fpt = sum(C.fp)
-    outflow(inp) = (cum = sinus_outflow(C, inp, tc; to); [k == 1 ? 0.0f0 : (cum[k] - cum[k - 1]) / dt_out / fpt for k in eachindex(tc)])
-    cs = outflow(curve_in(r)); npass = 0; change = 0.0f0
+    curve_in(r) = InputCurve(
+        Float32[_interp(t, r.t, r.out[s.input]) / pf for t in collect(0.0f0:fine:s.tmax)],
+        fine,
+    ) # plasma
+    tc = collect(0.0f0:dt_out:s.tmax)
+    fpt = sum(C.fp)
+    outflow(inp) = (
+        cum = sinus_outflow(C, inp, tc; to);
+        [k == 1 ? 0.0f0 : (cum[k] - cum[k - 1]) / dt_out / fpt for k in eachindex(tc)]
+    )
+    cs = outflow(curve_in(r))
+    npass = 0
+    change = 0.0f0
     sg = BC.segs[findfirst(x -> x.name === s.bed, BC.segs)]
-    share = sg.kind === :central ? 1.0f0 : sg.q # the organ segment's share of the cardiac output (central: all of it)
+    share = sg.kind === :central ?
+        1.0f0 :
+        sg.q # the organ segment's share of the cardiac output (central: all of it)
     while npass < passes
         fb = cs # the outflow fed back in this pass
-        r = simulate(BC, inj; tmax = s.tmax, dt = s.dt, every = s.every, detailed = Dict(s.bed => t -> pf * _interp(Float32(t), tc, fb)))
-        cs = outflow(curve_in(r)); npass += 1
+        r = simulate(
+            BC,
+            inj;
+            tmax = s.tmax,
+            dt = s.dt,
+            every = s.every,
+            detailed = Dict(s.bed => t -> pf * _interp(Float32(t), tc, fb)),
+        )
+        cs = outflow(curve_in(r))
+        npass += 1
         change = share * maximum(abs.(cs .- fb)) / max(maximum(abs.(cs)), floatmin(Float32))
         change <= tol && break
     end

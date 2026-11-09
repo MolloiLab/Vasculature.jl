@@ -46,7 +46,7 @@ ENV["VASCULATURE_BASE"] = get(ENV, "SNAPSHOT_BASE_PATH", IS_BUILD ? "/Vasculatur
 # =============================================================================
 
 let build_env = joinpath(@__DIR__, "build_env"),
-        extract = joinpath(@__DIR__, "extract_all.jl")
+    extract = joinpath(@__DIR__, "extract_all.jl")
     if !haskey(ENV, "VASCULATURE_SKIP_NB_EXPORT")
         Base.run(`$(Base.julia_cmd()) --project=$(build_env) $(extract)`)
     else
@@ -55,25 +55,30 @@ let build_env = joinpath(@__DIR__, "build_env"),
 end
 
 const NOTEBOOK_SLUGS = let dir = joinpath(@__DIR__, "notebooks"),
-        skip = Set(strip.(split(get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""), ","; keepempty = false)))
-
+    skip = Set(
+        strip.(split(get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""), ","; keepempty = false)),
+    )
     all_slugs = isdir(dir) ?
-        sort(
-            [
-                splitext(f)[1] for f in readdir(dir)
-                if endswith(f, ".jl") && !endswith(f, ".sessions.toml")
-            ]
-        ) :
+        sort([
+            splitext(f)[1]
+            for f in readdir(dir)
+            if endswith(f, ".jl") && !endswith(f, ".sessions.toml")
+        ]) :
         String[]
     kept = filter(s -> !(s in skip), all_slugs)
     if !isempty(skip)
         dropped = filter(s -> s in skip, all_slugs)
-        isempty(dropped) || println("[app] VASCULATURE_SKIP_NOTEBOOKS → skipping $(join(dropped, ", "))")
+        isempty(dropped) ||
+            println("[app] VASCULATURE_SKIP_NOTEBOOKS → skipping $(join(dropped, ", "))")
     end
     # A notebook without a rendered export gets no page yet (verify_notebook_exports.jl
     # still fails the deploy for it); the rest of the site builds.
-    unrendered = filter(s -> !isfile(joinpath(@__DIR__, "notebooks-static", "$(s).fragment.html")), kept)
-    isempty(unrendered) || @warn "[app] no rendered export yet, page skipped: $(join(unrendered, ", "))"
+    unrendered = filter(
+        s -> !isfile(joinpath(@__DIR__, "notebooks-static", "$(s).fragment.html")),
+        kept,
+    )
+    isempty(unrendered) ||
+        @warn "[app] no rendered export yet, page skipped: $(join(unrendered, ", "))"
     filter(s -> !(s in unrendered), kept)
 end
 
@@ -87,7 +92,7 @@ app = App(
     title = "Vasculature.jl",
     output_dir = "dist",
     base_path = ENV["VASCULATURE_BASE"],
-    layout = :Layout
+    layout = :Layout,
 )
 
 # Load file-based routes + components first so per-slug route handlers
@@ -102,7 +107,7 @@ Therapy.load_app!(app)
 # live OUTSIDE dist/ because Therapy wipes its output_dir before build.
 
 let nb_static = joinpath(@__DIR__, "notebooks-static"),
-        assets = joinpath(@__DIR__, "assets")
+    assets = joinpath(@__DIR__, "assets")
     if isdir(nb_static)
         Therapy.staticfiles(app, nb_static, "notebooks-static")
         println("  Mounted: /notebooks-static/  → $(nb_static)")
@@ -123,8 +128,7 @@ end
 # restart, and it shows up automatically — no other code changes required.
 
 let host = isdefined(Main, :TherapyApp) ? getfield(Main, :TherapyApp) : Main
-    NotebookPage = isdefined(host, :NotebookPage) ?
-        getfield(host, :NotebookPage) : nothing
+    NotebookPage = isdefined(host, :NotebookPage) ? getfield(host, :NotebookPage) : nothing
 
     if NotebookPage === nothing
         @warn "[docs] NotebookPage component not found — skipping per-notebook route registration"
@@ -132,9 +136,11 @@ let host = isdefined(Main, :TherapyApp) ? getfield(Main, :TherapyApp) : Main
         for slug in NOTEBOOK_SLUGS
             route = "/examples/$(slug)/"
             push!(
-                app.routes, route => let s = slug, np = NotebookPage
-                    () -> Base.invokelatest(np, s)
-                end
+                app.routes,
+                route =>
+                    let s = slug, np = NotebookPage
+                        () -> Base.invokelatest(np, s)
+                    end,
             )
             println("  Registered notebook route: $(route)")
         end
@@ -150,16 +156,25 @@ end
 # =============================================================================
 
 const FAVICON = joinpath(@__DIR__, "assets", "favicon.ico")
-const FAVICON_SVG = joinpath(@__DIR__, "assets", "favicon.svg") # same tree as the .ico; modern browsers prefer it
+const FAVICON_SVG = joinpath(
+    @__DIR__,
+    "assets",
+    "favicon.svg",
+) # same tree as the .ico; modern browsers prefer it
 
 for (url, path) in ("/favicon.ico" => FAVICON, "/favicon.svg" => FAVICON_SVG)
     isfile(path) || continue
     hdrs = Pair{String, String}["Cache-Control" => "public, max-age=86400"]
     push!(
-        app.static_mounts, Therapy.StaticMount(
-            url, path, hdrs, nothing, true,
-            Therapy.file(path; headers = hdrs)
-        )
+        app.static_mounts,
+        Therapy.StaticMount(
+            url,
+            path,
+            hdrs,
+            nothing,
+            true,
+            Therapy.file(path; headers = hdrs),
+        ),
     )
     println("  Mounted: $(url)  → $(path)")
 end
@@ -182,7 +197,8 @@ if IS_BUILD && isdir(app.output_dir)
         [
             "<link rel=\"icon\" href=\"$(ENV["VASCULATURE_BASE"])/favicon.ico\" sizes=\"any\">",
             "<link rel=\"icon\" type=\"image/svg+xml\" href=\"$(ENV["VASCULATURE_BASE"])/favicon.svg\">",
-        ], "\n    "
+        ],
+        "\n    ",
     )
     asset_version = get(ENV, "GITHUB_RUN_ID", get(ENV, "GITHUB_SHA", "local"))
     stylesheet_href = "$(ENV["VASCULATURE_BASE"])/styles.css"
@@ -194,7 +210,11 @@ if IS_BUILD && isdir(app.output_dir)
             content = read(path, String)
             occursin("</head>", content) || continue
             if isfile(FAVICON) && !occursin(favicon_link, content)
-                content = replace(content, "</head>" => "    $(favicon_link)\n</head>"; count = 1)
+                content = replace(
+                    content,
+                    "</head>" => "    $(favicon_link)\n</head>";
+                    count = 1,
+                )
             end
             content = replace(
                 content,

@@ -22,34 +22,44 @@
 # only at true bifurcations (so everything below a single-child node of an imported base
 # tree is ignored); `volume = :full` counts the whole tree.
 
-
-@inline own_baseline(lg::T) where {T} = (!(lg > zero(T)) || !isfinite(lg)) ? T(8) * T(MU) * T(KEPS) / T(π) :
+@inline own_baseline(lg::T) where {T} = (!(lg > zero(T)) || !isfinite(lg)) ?
+    T(8) * T(MU) * T(KEPS) / T(π) :
     T(8) * T(MU) * lg / T(π)
 
 # Recompute Rt[j], W[j] and the betas of j's children from the children's stored values.
 @inline function fast_node!(E::Engine{T}, j) where {T}
-    m = E.m; F = E.F; full = E.volume === :full
+    m = E.m
+    F = E.F
+    full = E.volume === :full
     lg = m.glen[j]
-    R = own_baseline(lg); W = lg
-    a = m.left[j]; b = m.right[j]
+    R = own_baseline(lg)
+    W = lg
+    a = m.left[j]
+    b = m.right[j]
     if a != 0 && b == 0
-        m.beta[a] = one(T); R += F.Rt[a]; full && (W += F.W[a])
+        m.beta[a] = one(T)
+        R += F.Rt[a]
+        full && (W += F.W[a])
     elseif b != 0 && a == 0
-        m.beta[b] = one(T); R += F.Rt[b]; full && (W += F.W[b])
+        m.beta[b] = one(T)
+        R += F.Rt[b]
+        full && (W += F.W[b])
     elseif a != 0 && b != 0
         bA, bB, inv = resistance_combine(m.gamma, m.flow[a], m.flow[b], F.Rt[a], F.Rt[b])
-        m.beta[a] = bA; m.beta[b] = bB
+        m.beta[a] = bA
+        m.beta[b] = bB
         R += inv
         W += bA * bA * F.W[a] + bB * bB * F.W[b]
     end
-    F.Rt[j] = R; F.W[j] = W
+    F.Rt[j] = R
+    F.W[j] = W
     return
 end
 
 # Index of root segment c among E.roots (a forest has a few roots, a tree one).
 @inline function _rootidx(E, c)
     roots = E.roots
-    @inbounds for k in 1:length(roots)
+    @inbounds for k in eachindex(roots)
         roots[k] == c && return k
     end
     return 1
@@ -87,18 +97,22 @@ function update_forest!(E)
     m = E.m
     K = length(E.roots)
     if K == 1
-        E.rmin[1] = T(Inf); E.rest[1] = zero(T)
+        E.rmin[1] = T(Inf)
+        E.rest[1] = zero(T)
         return E
     end
     for k in 1:K
-        mk = T(Inf); A = zero(T)
+        mk = T(Inf)
+        A = zero(T)
         for j in 1:K
             j == k && continue
-            c = E.roots[j]; r = _root_unc(E, c)
+            c = E.roots[j]
+            r = _root_unc(E, c)
             E.rcaps[j] > 0 && (mk = min(mk, E.rcaps[j] / r))
             A += r * r * m.lf * E.F.W[c]
         end
-        E.rmin[k] = mk; E.rest[k] = A
+        E.rmin[k] = mk
+        E.rest[k] = A
     end
     return E
 end
@@ -107,7 +121,8 @@ end
 @inline function fast_radius(E, j)
     T = typeof(E.m.lf)
     m = E.m
-    B = one(T); c = j
+    B = one(T)
+    c = j
     while m.parent[c] != 1
         par = m.parent[c]
         (m.left[par] != 0 && m.right[par] != 0) && (B *= m.beta[c])
@@ -129,7 +144,7 @@ function fast_refresh_radii!(E::Engine{T}) where {T}
     m = E.m
     update_forest!(E)
     rmax = zero(T)
-    front = Tuple{Int32, T, T}[]          # (segment, product of betas, root radius of its tree)
+    front = Tuple{Int32, T, T}[] # (segment, product of betas, root radius of its tree)
     for c in E.roots
         r = fast_root_radius(E, c)
         m.radius[c] = r
@@ -141,7 +156,8 @@ function fast_refresh_radii!(E::Engine{T}) where {T}
     while 0 < length(front) < target
         nxt = Tuple{Int32, T, T}[]
         for (j, B, r) in front
-            a = m.left[j]; b = m.right[j]
+            a = m.left[j]
+            b = m.right[j]
             bin = a != 0 && b != 0
             for c in (a, b)
                 c == 0 && continue
@@ -164,7 +180,8 @@ function fast_refresh_radii!(E::Engine{T}) where {T}
         rm = zero(T)
         @inbounds while !isempty(stack)
             j, B = pop!(stack)
-            a = m.left[j]; b = m.right[j]
+            a = m.left[j]
+            b = m.right[j]
             bin = a != 0 && b != 0
             for c in (a, b)
                 c == 0 && continue
@@ -177,18 +194,21 @@ function fast_refresh_radii!(E::Engine{T}) where {T}
         end
         tmax[f] = max(tmax[f], rm)
     end
-    update_rmax!(E)                       # rmax over ordinary segments, and the list of thick ones
+    update_rmax!(E) # rmax over ordinary segments, and the list of thick ones
     E.F.since = 0
     E.g.prune = true
     grid_refresh_radii!(E.g, m)
-    grid_compact!(E.g)                    # cell lists contiguous again (see grid_compact!)
+    grid_compact!(E.g) # cell lists contiguous again (see grid_compact!)
     return E
 end
 
 function init_fast!(E::Engine{T}) where {T}
-    m = E.m; n = nsegments(m)
-    E.F.Rt = zeros(T, n); E.F.W = zeros(T, n)
-    for j in postorder(m)                 # every tree of a forest
+    m = E.m
+    n = nsegments(m)
+    E.F.Rt = zeros(T, n)
+    E.F.W = zeros(T, n)
+    for j in postorder(m)
+        # every tree of a forest
         fast_node!(E, j)
     end
     fast_refresh_radii!(E)
@@ -201,49 +221,73 @@ O(depth) and allocation free (`ws` is unused). Returns (total volume, radius of 
 new left, radius of new terminal).
 """
 @inline function tentative_fast!(ws, E, s, pOpt::P3{T}, p::P3{T}, qNew::T) where {T}
-    m = E.m; F = E.F; g = m.gamma; full = _fullvol(E)
+    m = E.m
+    F = E.F
+    g = m.gamma
+    full = _fullvol(E)
     lg_s = norm3(sub3(pOpt, m.pos[m.parent[s]]))
     lg_nl = norm3(sub3(m.pos[s], pOpt))
     lg_nr = norm3(sub3(p, pOpt))
-    a = m.left[s]; b = m.right[s]
-    R_nl = own_baseline(lg_nl); W_nl = lg_nl
+    a = m.left[s]
+    b = m.right[s]
+    R_nl = own_baseline(lg_nl)
+    W_nl = lg_nl
     if a != 0 && b == 0
-        R_nl += F.Rt[a]; full && (W_nl += F.W[a])
+        R_nl += F.Rt[a]
+        full && (W_nl += F.W[a])
     elseif b != 0 && a == 0
-        R_nl += F.Rt[b]; full && (W_nl += F.W[b])
+        R_nl += F.Rt[b]
+        full && (W_nl += F.W[b])
     elseif a != 0 && b != 0
         bA, bB, inv = resistance_combine(g, m.flow[a], m.flow[b], F.Rt[a], F.Rt[b])
         R_nl += inv
         W_nl += bA * bA * F.W[a] + bB * bB * F.W[b]
     end
-    R_nr = own_baseline(lg_nr); W_nr = lg_nr
+    R_nr = own_baseline(lg_nr)
+    W_nr = lg_nr
     b_nl, b_nr, inv = resistance_combine(g, m.flow[s], qNew, R_nl, R_nr)
     R_c = own_baseline(lg_s) + inv
     W_c = lg_s + b_nl * b_nl * W_nl + b_nr * b_nr * W_nr
     f_c = m.flow[s] + qNew
-    B = one(T)              # product of the radius ratios on the path (the radius of s / root radius)
-    c = s; par = m.parent[c]
+    B = one(T) # product of the radius ratios on the path (the radius of s / root radius)
+    c = s
+    par = m.parent[c]
     while par != 1
-        la = m.left[par]; ra = m.right[par]
+        la = m.left[par]
+        ra = m.right[par]
         lgp = m.glen[par]
-        R_a = own_baseline(lgp); W_a = lgp
+        R_a = own_baseline(lgp)
+        W_a = lgp
         if (la != 0) ⊻ (ra != 0)
-            R_a += R_c; full && (W_a += W_c); bc = one(T)
+            R_a += R_c
+            full && (W_a += W_c)
+            bc = one(T)
         else
-            fL = la == c ? f_c : m.flow[la]; RL = la == c ? R_c : F.Rt[la]; WL = la == c ? W_c : F.W[la]
-            fR = ra == c ? f_c : m.flow[ra]; RR = ra == c ? R_c : F.Rt[ra]; WR = ra == c ? W_c : F.W[ra]
+            fL = la == c ? f_c : m.flow[la]
+            RL = la == c ? R_c : F.Rt[la]
+            WL = la == c ? W_c : F.W[la]
+            fR = ra == c ? f_c : m.flow[ra]
+            RR = ra == c ? R_c : F.Rt[ra]
+            WR = ra == c ? W_c : F.W[ra]
             bL, bR, inv2 = resistance_combine(g, fL, fR, RL, RR)
             R_a += inv2
             W_a += bL * bL * WL + bR * bR * WR
             bc = la == c ? bL : bR
         end
         B *= bc
-        f_c = m.flow[par] + qNew; R_c = R_a; W_c = W_a
-        c = par; par = m.parent[c]
+        f_c = m.flow[par] + qNew
+        R_c = R_a
+        W_c = W_a
+        c = par
+        par = m.parent[c]
     end
     lf = m.lf
-    k = _rootidx(E, c)                    # c is now the root segment of s's tree
-    rroot, sc = _scaled_root(E.rcaps[k], upow((lf * R_c * f_c) / m.pdrop, T(0.25)), E.rmin[k])
+    k = _rootidx(E, c) # c is now the root segment of s's tree
+    rroot, sc = _scaled_root(
+        E.rcaps[k],
+        upow((lf * R_c * f_c) / m.pdrop, T(0.25)),
+        E.rmin[k],
+    )
     r_s = rroot * B
     # total volume: this tree's tentative volume plus the other trees' at the forest's common
     # scale (zero for a single tree)
@@ -297,9 +341,12 @@ end
 # old distal part (new left, nl) and the new terminal (nr) below it, and add qNew to the flow
 # of every ancestor. Returns (nl, nr).
 function commit_structure!(E::Engine{T}, s::Int32, pOpt::P3{T}, p::P3{T}, qNew::T) where {T}
-    m = E.m; F = E.F
-    nl = Int32(nsegments(m) + 1); nr = Int32(nl + 1)
-    a = m.left[s]; b = m.right[s]
+    m = E.m
+    F = E.F
+    nl = Int32(nsegments(m) + 1)
+    nr = Int32(nl + 1)
+    a = m.left[s]
+    b = m.right[s]
     push!(m.pos, m.pos[s], p)
     push!(m.radius, m.radius[s], m.radius[s])
     push!(m.kterm, m.kterm[s], Int32(1))
@@ -307,29 +354,36 @@ function commit_structure!(E::Engine{T}, s::Int32, pOpt::P3{T}, p::P3{T}, qNew::
     push!(m.flow, m.flow[s], qNew)
     push!(m.beta, one(T), one(T))
     push!(m.parent, s, s)
-    push!(m.left, a, 0); push!(m.right, b, 0)
+    push!(m.left, a, 0)
+    push!(m.right, b, 0)
     push!(m.glen, zero(T), zero(T))
-    push!(F.Rt, zero(T), zero(T)); push!(F.W, zero(T), zero(T))
+    push!(F.Rt, zero(T), zero(T))
+    push!(F.W, zero(T), zero(T))
     m.parent[a == 0 ? 1 : a] = nl
     m.parent[b == 0 ? 1 : b] = nl
     m.pos[s] = pOpt
     m.kterm[s] += Int32(1)
     m.flow[s] += qNew
-    m.left[s] = nl; m.right[s] = nr
+    m.left[s] = nl
+    m.right[s] = nr
     push!(m.terminals, nr)
     push!(m.listed, false, true)
     push!(E.tcount, Int8(0), Int8(1))
     m.kterm_total += 1
     update_flow!(m, m.parent[s], qNew)
-    refresh_glen!(m, s); refresh_glen!(m, nl); refresh_glen!(m, nr)
+    refresh_glen!(m, s)
+    refresh_glen!(m, nl)
+    refresh_glen!(m, nr)
     return nl, nr
 end
 
 "Fast-mode commit: same topology update as `commit!`, then an O(depth) hydraulic update."
 function commit_fast!(E::Engine{T}, s::Int32, pOpt::P3{T}, p::P3{T}, qNew::T) where {T}
-    m = E.m; F = E.F
+    m = E.m
+    F = E.F
     nl, nr = commit_structure!(E, s, pOpt, p, qNew)
-    fast_node!(E, nl); fast_node!(E, nr)
+    fast_node!(E, nl)
+    fast_node!(E, nr)
     j = s
     while j != 1
         fast_node!(E, j)
@@ -343,16 +397,22 @@ function commit_fast!(E::Engine{T}, s::Int32, pOpt::P3{T}, p::P3{T}, qNew::T) wh
     end
     j = s
     while j != 1
-        r = fast_radius(E, j); m.radius[j] = r
+        r = fast_radius(E, j)
+        m.radius[j] = r
         note_radius!(E, j, r)
-        j != s && length(E.g.rref) >= j && E.g.rref[j] > 0 && (E.g.growth = max(E.g.growth, r / E.g.rref[j]))
+        j != s &&
+            length(E.g.rref) >= j &&
+            E.g.rref[j] > 0 &&
+            (E.g.growth = max(E.g.growth, r / E.g.rref[j]))
         j = m.parent[j]
     end
     F.since += 1
     every = F.every > 0 ? F.every : radii_refresh_period(m)
     F.since >= every && fast_refresh_radii!(E)
     grid_remove!(E.g, s)
-    grid_insert!(E.g, m, s); grid_insert!(E.g, m, nl); grid_insert!(E.g, m, nr)
+    grid_insert!(E.g, m, s)
+    grid_insert!(E.g, m, nl)
+    grid_insert!(E.g, m, nr)
     return
 end
 # (grid_insert! raises the cell radius bounds for the three updated segments; every other

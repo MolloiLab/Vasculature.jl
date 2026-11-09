@@ -236,7 +236,7 @@ let k = xcat_slice(z_xcat)
     every = 2
     groups = [
         GROUP_OF_LABEL[xcat_labels[i, j, k] + 1]
-            for i in 1:every:XCAT_DIMS[1], j in 1:every:XCAT_DIMS[2]
+        for i in 1:every:XCAT_DIMS[1], j in 1:every:XCAT_DIMS[2]
     ]
 
     fig = Mke.Figure(size = (1200, 720))
@@ -306,10 +306,10 @@ Growth runs on a 1 mm grid around the pericardium, into the LV and RV myocardium
 
 # ╔═╡ 985bdb9d-847b-446c-9e54-b9f9fe0be043
 growth_grid = let (points, _) = V.XCAT.tessellate(
-        xcat_surfaces["dias_pericardium"];
-        nu = 60,
-        nv = 60,
-    )
+    xcat_surfaces["dias_pericardium"];
+    nu = 60,
+    nv = 60,
+)
     lower = floor.(Int, vec(minimum(points; dims = 2))) .- 2
     upper = ceil.(Int, vec(maximum(points; dims = 2))) .+ 2
     V.VoxelGrid(Tuple(Float64.(lower)), 1.0, Tuple(upper .- lower .+ 1))
@@ -318,11 +318,7 @@ end
 # ╔═╡ c618deff-991a-43f2-a4ca-fbc0b65cf28e
 heart_masks = cached("masks") do
     pericardium = V.voxelize(
-        V.XCAT.tessellate(
-            xcat_surfaces["dias_pericardium"];
-            nu = 160,
-            nv = 160,
-        )...,
+        V.XCAT.tessellate(xcat_surfaces["dias_pericardium"]; nu = 160, nv = 160)...,
         growth_grid,
     )
     V.XCAT.label_masks(
@@ -355,12 +351,16 @@ MYOCARDIUM_SURFACE = let
         CartesianIndex(0, 0, -1),
     )
     on_surface(I) = any(
-        !checkbounds(Bool, myocardium, I + d) || !myocardium[I + d] for d in neighbours
+        !checkbounds(Bool, myocardium, I + d) || !myocardium[I + d]
+        for d in neighbours
     )
     voxels = findall(myocardium)
     surface = [n for (n, I) in enumerate(voxels) if on_surface(I)]
     (
-        points = [Mke.Point3f(Tuple(voxels[n]) .- 1 .+ growth_grid.origin) for n in surface],
+        points = [
+            Mke.Point3f(Tuple(voxels[n]) .- 1 .+ growth_grid.origin)
+            for n in surface
+        ],
         voxels = surface,
     )
 end;
@@ -384,10 +384,7 @@ are drawn last so they sit on top.
 """
 function draw_vessels!(ax, tree; colormap, min_radius)
     shown = filter(j -> tree.r[j] >= min_radius, sortperm(tree.r))
-    segments = [
-        Mke.Point3f(tree.a[:, j]) => Mke.Point3f(tree.b[:, j])
-            for j in shown
-    ]
+    segments = [Mke.Point3f(tree.a[:, j]) => Mke.Point3f(tree.b[:, j]) for j in shown]
     radius = tree.r[shown]
     # CairoMakie wants a colour and a width at each end of every segment
     return Mke.linesegments!(
@@ -405,7 +402,7 @@ end
 BLOOD_BLOCKERS = cached("blood") do
     first_voxel = [
         round(Int, (growth_grid.origin[d] - 0.5 - XCAT_ORIGIN[d]) / XCAT_VOXEL_MM) + 1
-            for d in 1:3
+        for d in 1:3
     ]
     cells = [ceil(Int, (growth_grid.dims[d] + 1) / 0.4) for d in 1:3]
     is_blood = falses(256)
@@ -420,9 +417,7 @@ BLOOD_BLOCKERS = cached("blood") do
             j = first_voxel[2] + 2(b - 1) + dj
             k = first_voxel[3] + 2(c - 1) + dk
             (
-                1 <= i <= XCAT_DIMS[1] &&
-                    1 <= j <= XCAT_DIMS[2] &&
-                    1 <= k <= XCAT_DIMS[3]
+                1 <= i <= XCAT_DIMS[1] && 1 <= j <= XCAT_DIMS[2] && 1 <= k <= XCAT_DIMS[3]
             ) || continue
             is_blood[xcat_labels[i, j, k] + 1] && (blood[a, b, c] = 0x01)
         end
@@ -450,12 +445,12 @@ artery_inputs = cached("artery_inputs") do
             forbid,
             blockers = BLOOD_BLOCKERS,
         )
-            for tree in trees
+        for tree in trees
     ]
     lumens = [
         V.XCAT.vessel_tube(tree, growth_grid) .|
             V.XCAT.vessel_bridges(tree, myocardium, growth_grid)
-            for tree in trees
+        for tree in trees
     ]
     (
         trees = first.(stubbed),
@@ -471,11 +466,7 @@ vein_inputs = cached("vein_inputs") do
 
     # the coronary sinus ostium: the point of cor_vein1 nearest the right atrium, joined to it
     # by a 6 mm connector
-    atrium, _ = V.XCAT.tessellate(
-        xcat_surfaces["dias_ra"];
-        nu = 120,
-        nv = 120,
-    )
+    atrium, _ = V.XCAT.tessellate(xcat_surfaces["dias_ra"]; nu = 120, nv = 120)
     nearest_atrium(p) = begin
         d = vec(sqrt.(sum(abs2, atrium .- p; dims = 1)))
         k = argmin(d)
@@ -483,8 +474,7 @@ vein_inputs = cached("vein_inputs") do
     end
     ostium = argmin([nearest_atrium(vein1.X[:, k])[1] for k in 1:size(vein1.X, 2)])
     gap, atrium_point = nearest_atrium(vein1.X[:, ostium])
-    start =
-        vein1.X[:, ostium] .-
+    start = vein1.X[:, ostium] .-
         6.0 .* (vein1.X[:, ostium] .- atrium_point) ./ max(gap, 1.0e-6)
 
     lines = [
@@ -497,13 +487,7 @@ vein_inputs = cached("vein_inputs") do
         V.XCAT.Centerline("cor_vein1b", vein1.X[:, ostium:end], vein1.r[ostium:end]),
         vein2,
     ]
-    base = only(
-        V.XCAT.base_forest(
-            lines;
-            roots = ["cs_ostium"],
-            attach_tol = 4.0,
-        ),
-    )
+    base = only(V.XCAT.base_forest(lines; roots = ["cs_ostium"], attach_tol = 4.0))
     # tributaries join the imaged veins along their length, as branches join the imaged arteries (imaged vessels are fixed
     # in growth, so without stubs new vessels could join only at their tips)
     tree, stubs = V.XCAT.penetrating_stubs(
@@ -514,8 +498,7 @@ vein_inputs = cached("vein_inputs") do
         forbid,
         blockers = BLOOD_BLOCKERS,
     )
-    lumen =
-        V.XCAT.vessel_tube(tree, growth_grid) .|
+    lumen = V.XCAT.vessel_tube(tree, growth_grid) .|
         V.XCAT.vessel_bridges(tree, myocardium, growth_grid)
     (tree = tree, stubs = stubs, pass = lumen .& .!forbid .& .!myocardium)
 end;
@@ -560,7 +543,10 @@ let k = clamp(round(Int, z_domain - growth_grid.origin[3]) + 1, 1, growth_grid.d
     stub_counts = join(
         [
             "$name $(r.stubs) of $(r.sites)"
-                for (name, r) in zip(["LCA", "RCA", "veins"], [artery_inputs.stubs; vein_inputs.stubs])
+            for (name, r) in zip(
+                ["LCA", "RCA", "veins"],
+                [artery_inputs.stubs; vein_inputs.stubs],
+            )
         ],
         ", ",
     )
@@ -624,7 +610,7 @@ function grow_forest(spec, trees, pass, name)
     domain = V.write_vol(joinpath(dir, "$name.vol"), myocardium .| pass, lower)
     inlets = [
         V.XCAT.write_base_gxl(joinpath(dir, "$(name)_$k.xml"), tree)
-            for (k, tree) in enumerate(trees)
+        for (k, tree) in enumerate(trees)
     ]
     engine = V.grow(
         V.GrowthSpec(spec; device = DEVICE),
@@ -658,26 +644,17 @@ let fig = Mke.Figure(size = (1200, 560))
         title = "Grown arteries (red) and veins (blue), radius ≥ $(min_radius_shown) mm",
     )
     draw_myocardium_shell!(ax)
-    draw_vessels!(
-        ax,
-        veins;
-        colormap = VEIN_COLOURS,
-        min_radius = min_radius_shown,
-    )
-    draw_vessels!(
-        ax,
-        arteries;
-        colormap = ARTERY_COLOURS,
-        min_radius = min_radius_shown,
-    )
+    draw_vessels!(ax, veins; colormap = VEIN_COLOURS, min_radius = min_radius_shown)
+    draw_vessels!(ax, arteries; colormap = ARTERY_COLOURS, min_radius = min_radius_shown)
 
     terminal_radius_um = Dict(
-        name => begin
-            has_child = falses(length(tree.r))
-            foreach(p -> p > 0 && (has_child[p] = true), tree.parent)
-            1000 .* tree.r[.!has_child]
-        end
-            for (name, tree) in (("arteries", arteries), ("veins", veins))
+        name =>
+            begin
+                has_child = falses(length(tree.r))
+                foreach(p -> p > 0 && (has_child[p] = true), tree.parent)
+                1000 .* tree.r[.!has_child]
+            end
+        for (name, tree) in (("arteries", arteries), ("veins", veins))
     )
     ax2 = Mke.Axis(
         fig[1, 2];
@@ -719,13 +696,7 @@ end
 
 # ╔═╡ 1279319b-88cc-4214-adae-f8fac1701c52
 flows = cached("flow") do
-    V.flow(
-        V.HEART_FLOW,
-        arteries,
-        veins,
-        tissue_centres;
-        to = DEVICE,
-    )
+    V.flow(V.HEART_FLOW, arteries, veins, tissue_centres; to = DEVICE)
 end;
 
 # ╔═╡ e442b143-f7da-4e3b-9151-6f81358788c5
@@ -758,9 +729,10 @@ z (mm): $(@bind z_flow Slider(growth_grid.origin[3]:2:(growth_grid.origin[3] + g
 let fig = Mke.Figure(size = (1200, 520))
     xs = growth_grid.origin[1] .+ (0:(growth_grid.dims[1] - 1))
     ys = growth_grid.origin[2] .+ (0:(growth_grid.dims[2] - 1))
-    for (column, (state, circuit)) in enumerate(
-            (("Rest", flows.rest), ("Stress", flows.stress)),
-        )
+    for (column, (state, circuit)) in enumerate((
+            ("Rest", flows.rest),
+            ("Stress", flows.stress),
+        ))
         ax = Mke.Axis(
             fig[1, column];
             title = @sprintf("%s · organ MBF %.2f mL/min/g", state, circuit.resist.mbf),
@@ -777,11 +749,7 @@ let fig = Mke.Figure(size = (1200, 520))
             nan_color = :black,
         )
         Mke.hidedecorations!(ax)
-        column == 2 && Mke.Colorbar(
-            fig[1, 3],
-            map;
-            label = "MBF (mL/min/g)",
-        )
+        column == 2 && Mke.Colorbar(fig[1, 3], map; label = "MBF (mL/min/g)")
     end
     reserve = flows.stress.resist.mbf / flows.rest.resist.mbf
     Mke.Label(
@@ -824,12 +792,7 @@ function transport_state(state, circuit)
     return (
         state,
         circuit,
-        V.transport(
-            spec,
-            circuit,
-            INJECTION;
-            times = V.HEART_PHANTOM.times,
-        ),
+        V.transport(spec, circuit, INJECTION; times = V.HEART_PHANTOM.times),
     )
 end
 
@@ -841,13 +804,14 @@ file. The full results (every vessel's iodine at every frame) take several GB, s
 """
 function transport_cache(name, circuits)
     path = joinpath(CACHE_DIR, name * ".jls")
-    isfile(path) || serialize(
-        path,
-        [
-            transport_state("rest", circuits.rest),
-            transport_state("stress", circuits.stress),
-        ],
-    )
+    isfile(path) ||
+        serialize(
+            path,
+            [
+                transport_state("rest", circuits.rest),
+                transport_state("stress", circuits.stress),
+            ],
+        )
     return path
 end
 
@@ -930,28 +894,48 @@ end;
 begin
     wall_names = split_walls ? ["LV", "RV"] : ["Myocardium"]
     territory_names = split_territories ? ["LAD", "LCx", "RCA"] : String[]
-    wall_rois =
-        isempty(territory_names) ? wall_names :
+    wall_rois = isempty(territory_names) ?
+        wall_names :
         ["$w · $t" for w in wall_names for t in territory_names]
-    epicardial_names = epicardial_compartments ? ["$w epicardial vessels" for w in wall_names] : String[]
+    epicardial_names = epicardial_compartments ?
+        ["$w epicardial vessels" for w in wall_names] :
+        String[]
     ROI_NAMES = [wall_rois; "Papillary muscles"; epicardial_names]
 
     roi_index(name) = findfirst(==(name), ROI_NAMES)
     ROI_GROUPS = Pair{String, Vector{Int}}[]
     # a wall's own compartments: its territories, or the wall itself
-    wall_ids(w) = isempty(territory_names) ? [roi_index(w)] : [roi_index("$w · $t") for t in territory_names]
+    wall_ids(w) = isempty(territory_names) ?
+        [roi_index(w)] :
+        [roi_index("$w · $t") for t in territory_names]
     heart_ids = collect(eachindex(wall_rois))
     length(heart_ids) > 1 && push!(ROI_GROUPS, "heart myocardium" => heart_ids)
     if epicardial_compartments
-        push!(ROI_GROUPS, "heart myocardium + epicardial vessels" => [heart_ids; roi_index.(epicardial_names)])
+        push!(
+            ROI_GROUPS,
+            "heart myocardium + epicardial vessels" => [
+                heart_ids
+                roi_index.(epicardial_names)
+            ],
+        )
     end
     if length(wall_names) > 1
         for w in wall_names
             length(wall_ids(w)) > 1 && push!(ROI_GROUPS, "$w myocardium" => wall_ids(w))
-            epicardial_compartments && push!(ROI_GROUPS, "$w myocardium + epicardial vessels" => [wall_ids(w); roi_index("$w epicardial vessels")])
+            epicardial_compartments &&
+                push!(
+                    ROI_GROUPS,
+                    "$w myocardium + epicardial vessels" => [
+                        wall_ids(w)
+                        roi_index("$w epicardial vessels")
+                    ],
+                )
         end
         if !isempty(territory_names)
-            append!(ROI_GROUPS, [t => [roi_index("$w · $t") for w in wall_names] for t in territory_names])
+            append!(
+                ROI_GROUPS,
+                [t => [roi_index("$w · $t") for w in wall_names] for t in territory_names],
+            )
         end
     end
     ROI_NAMES, ROI_GROUPS
@@ -1002,8 +986,8 @@ coronary_branch = let tree = arteries, n = length(tree.r)
     while lad == 0
         big = [
             c
-                for c in children[j]
-                if tree.isbase[c] && terminals_below[c] > 0.05 * terminals_below[lca]
+            for c in children[j]
+            if tree.isbase[c] && terminals_below[c] > 0.05 * terminals_below[lca]
         ]
         if length(big) >= 2
             front_to_back = sortperm([y_below[c] / terminals_below[c] for c in big])
@@ -1029,7 +1013,7 @@ end;
 # ╔═╡ a162fdf2-c33e-4724-8874-b0ab23c96cae
 "Each 1 mm voxel's territory (1–3), carried 25 mm out from the myocardium so the lumens on its surface get one too."
 territory_map = let weights = zeros(Float32, 3, size(tissue_centres, 2)),
-        map = zeros(Int8, growth_grid.dims)
+    map = zeros(Int8, growth_grid.dims)
     for (voxel, terminal, w) in flows.pairs
         weights[coronary_branch.of[terminal], voxel] += w
     end
@@ -1098,7 +1082,8 @@ function enclosed_vessels(box; reach_mm = 8.0)
     vessel(label) = label == 0x1a || label == 0x1b || label == 0x1e
     directions = [
         (i, j, k) ./ sqrt(i^2 + j^2 + k^2)
-            for i in -1:1, j in -1:1, k in -1:1 if (i, j, k) != (0, 0, 0)
+        for i in -1:1, j in -1:1, k in -1:1
+        if (i, j, k) != (0, 0, 0)
     ]
     steps = round(Int, reach_mm / XCAT_VOXEL_MM)
     sides = (
@@ -1188,16 +1173,16 @@ A coronary artery or vein lumen outside both, on the heart's surface, is the epi
 (`walls`): `epicardial` holds their ids (LV, RV; 0 for none).
 """
 function make_roi(
-        labels,
-        envelopes,
-        territories,
-        walls,
-        grid;
-        papillary,
-        epicardial,
-        split_walls,
-        split_territories,
-    )
+    labels,
+    envelopes,
+    territories,
+    walls,
+    grid;
+    papillary,
+    epicardial,
+    split_walls,
+    split_territories,
+)
     lv = envelopes.lv
     rv = envelopes.rv
     papillary_mask = envelopes.papillary
@@ -1216,7 +1201,10 @@ function make_roi(
         end
         g = round.(Int, p .- grid.origin) .+ 1
         # a surface coronary artery or vein lumen: the epicardial compartment of the wall beside it
-        if wall == 0 && (label == 0x1a || label == 0x1b) && all(1 .<= g .<= size(walls)) && walls[g...] > 0
+        if wall == 0 &&
+                (label == 0x1a || label == 0x1b) &&
+                all(1 .<= g .<= size(walls)) &&
+                walls[g...] > 0
             return epicardial[split_walls ? Int(walls[g...]) : 1]
         end
         wall == 0 && return 0
@@ -1238,7 +1226,8 @@ roi = make_roi(
     growth_grid;
     papillary = findfirst(==("Papillary muscles"), ROI_NAMES),
     epicardial = Tuple(
-        something(findfirst(==("$w epicardial vessels"), ROI_NAMES), 0) for w in (split_walls ? ("LV", "RV") : ("Myocardium", "Myocardium"))
+        something(findfirst(==("$w epicardial vessels"), ROI_NAMES), 0)
+        for w in (split_walls ? ("LV", "RV") : ("Myocardium", "Myocardium"))
     ),
     split_walls,
     split_territories,
@@ -1252,8 +1241,8 @@ for the RV, gold for the papillary muscles, violet for the epicardial vessels (d
 function roi_colormap()
     lv = ["#c62828", "#2e7d32", "#1565c0"]
     rv = ["#ef9a9a", "#a5d6a7", "#90caf9"]
-    walls =
-        split_territories ? (split_walls ? [lv; rv] : lv) :
+    walls = split_territories ?
+        (split_walls ? [lv; rv] : lv) :
         (split_walls ? ["#c62828", "#90caf9"] : ["#c62828"])
     epicardial = ["#6a1b9a", "#ce93d8"][1:count(endswith(" epicardial vessels"), ROI_NAMES)]
     return Mke.cgrad(
@@ -1337,14 +1326,7 @@ imaged segment, a great-vessel voxel its vessel's pool and its place along the v
 label is decided by the label alone (a body pool, `V.XCAT_POOL_OF_LABEL`, or a static material). Everything it reads is
 captured with its type, so it compiles to fast code.
 """
-function make_classifier(
-        labels,
-        grid,
-        numbers,
-        artery_segments,
-        vein_segments,
-        transit,
-    )
+function make_classifier(labels, grid, numbers, artery_segments, vein_segments, transit)
     # by the label alone: 0 needs the voxel's geometry
     by_label = fill((V.VOX_POOL, Int32(24), 0.0f0), 256)
     needs_geometry = falses(256)
@@ -1366,7 +1348,10 @@ function make_classifier(
         needs_geometry[label + 1] || return by_label[label + 1]
 
         if label == 0x0f || label == 0x10
-            number = V.XCAT.nearest_tissue_voxel(numbers, round.(Int, p .- grid.origin) .+ 1)
+            number = V.XCAT.nearest_tissue_voxel(
+                numbers,
+                round.(Int, p .- grid.origin) .+ 1,
+            )
             return number > 0 ?
                 (V.VOX_TISSUE, number, 0.0f0) :
                 (V.VOX_POOL, Int32(26), 0.0f0)
@@ -1382,10 +1367,16 @@ function make_classifier(
             0.0f0,
         )
         label == 0x1c && return vessel_pool(p, 0x01)
-        label == 0x19 && return vessel_pool(p, V.XCAT.vessel_tree_at(transit, p, (0x01, 0x02)))
+        label == 0x19 && return vessel_pool(
+            p,
+            V.XCAT.vessel_tree_at(transit, p, (0x01, 0x02)),
+        )
         label == 0x7d && return vessel_pool(p, 0x02)
         label == 0x7c && return vessel_pool(p, 0x05)
-        return vessel_pool(p, V.XCAT.vessel_tree_at(transit, p, (0x03, 0x04, 0x05, 0x06, 0x07)))
+        return vessel_pool(
+            p,
+            V.XCAT.vessel_tree_at(transit, p, (0x03, 0x04, 0x05, 0x06, 0x07)),
+        )
     end
 end
 
@@ -1405,14 +1396,14 @@ The bolus-tracking points: the descending aorta at the myocardium's mid level, a
 leaves the heart (clear of the root's sinuses), the centre of its cross-section there.
 """
 TRACKING_POINTS = let voxels = findall(myocardium)
-    z_mid =
-        (minimum(v[3] for v in voxels) + maximum(v[3] for v in voxels)) / 2 +
-        growth_grid.origin[3] - 1
+    z_mid = (minimum(v[3] for v in voxels) + maximum(v[3] for v in voxels)) / 2 +
+        growth_grid.origin[3] -
+        1
     k = xcat_slice(z_mid)
     aorta = [
         (i, j)
-            for j in 1:XCAT_DIMS[2], i in 1:XCAT_DIMS[1]
-            if xcat_labels[i, j, k] == 0x1c
+        for j in 1:XCAT_DIMS[2], i in 1:XCAT_DIMS[1]
+        if xcat_labels[i, j, k] == 0x1c
     ]
     back = maximum(last, aorta)
     descending = [
@@ -1431,14 +1422,18 @@ TRACKING_POINTS = let voxels = findall(myocardium)
     step = round(Int, transit.h / XCAT_VOXEL_MM)
     ascending = [
         c
-            for c in CartesianIndices(transit.tree)
-            if transit.tree[c] == 0x01 && !transit.descending[c] && !isnan(transit.volume[c]) &&
-            transit.volume[c] < transit.apex_ml && xcat_labels[((Tuple(c) .- 1) .* step .+ 1)...] == 0x1c
+        for c in CartesianIndices(transit.tree)
+        if transit.tree[c] == 0x01 &&
+            !transit.descending[c] &&
+            !isnan(transit.volume[c]) &&
+            transit.volume[c] < transit.apex_ml &&
+            xcat_labels[((Tuple(c) .- 1) .* step .+ 1)...] == 0x1c
     ]
     z_low = minimum(c[3] for c in ascending)
     level = [c for c in ascending if c[3] == z_low + round(Int, 15 / transit.h)]
     ascending_point = Tuple(
-        transit.origin_mm[d] + (sum(c[d] for c in level) / length(level) - 1) * transit.h for d in 1:3
+        transit.origin_mm[d] + (sum(c[d] for c in level) / length(level) - 1) * transit.h
+        for d in 1:3
     )
     ["descending aorta" => descending_point, "ascending aorta" => ascending_point]
 end
@@ -1448,12 +1443,7 @@ end
 Write one scenario's phantom into `PHANTOM_DIR/name`, once, from its transport file (read here, and let go once the
 phantom is written).
 """
-function save_phantom(
-        name,
-        transport_file;
-        spec = PHANTOM_SPEC,
-        classify = classify,
-    )
+function save_phantom(name, transport_file; spec = PHANTOM_SPEC, classify = classify)
     dir = joinpath(PHANTOM_DIR, name)
     isfile(joinpath(dir, "phantom.toml")) && return dir
 
@@ -1573,30 +1563,18 @@ function slice_figure(view, state, t, z)
 
     fig = Mke.Figure(; size = (1500, 1120))
     function panel(
-            row,
-            column,
-            title,
-            image;
-            colormap,
-            colorrange,
-            label = nothing,
-            legend = nothing,
-        )
+        row,
+        column,
+        title,
+        image;
+        colormap,
+        colorrange,
+        label = nothing,
+        legend = nothing,
+    )
         cell = fig[row, column] = Mke.GridLayout()
-        ax = Mke.Axis(
-            cell[1, 1];
-            title,
-            aspect = Mke.DataAspect(),
-            yreversed = true,
-        )
-        map = Mke.heatmap!(
-            ax,
-            xs,
-            ys,
-            image;
-            colormap,
-            colorrange,
-        )
+        ax = Mke.Axis(cell[1, 1]; title, aspect = Mke.DataAspect(), yreversed = true)
+        map = Mke.heatmap!(ax, xs, ys, image; colormap, colorrange)
         Mke.hidedecorations!(ax)
         if legend === nothing
             Mke.Colorbar(
@@ -1677,12 +1655,7 @@ function slice_figure(view, state, t, z)
         colorrange = (0, 6),
         label = "mL/min/g",
     )
-    Mke.Label(
-        fig[0, :],
-        "z = $(round(z; digits = 1)) mm";
-        fontsize = 20,
-        font = :bold,
-    )
+    Mke.Label(fig[0, :], "z = $(round(z; digits = 1)) mm"; fontsize = 20, font = :bold)
     # three equal columns: no legend or colour bar widens its own
     for column in 1:3
         Mke.colsize!(fig.layout, column, Mke.Relative(1 / 3))
@@ -1730,11 +1703,7 @@ function curves_figure(view)
             linestyle = :dash,
         )
         Mke.xlims!(ax, 0, 40)
-        column == 1 && Mke.axislegend(
-            ax;
-            position = :lt,
-            labelsize = 11,
-        )
+        column == 1 && Mke.axislegend(ax; position = :lt, labelsize = 11)
     end
 
     ledger = bundle.ledger["stress"]
@@ -1811,7 +1780,6 @@ curves_figure(healthy)
 # ╔═╡ 173bb953-3b21-4c4a-aa00-9c838e0b21e1
 outflow_check(healthy)
 
-
 # ╔═╡ 948065f2-a977-4980-9eba-dec19b754a5a
 md"""
 ## 9. A 90% LAD Stenosis
@@ -1844,9 +1812,11 @@ LESION = let tree = arteries, n = length(tree.r)
 
     # the imaged lumen radius at each segment: XCAT's LAD centreline radius nearest to it
     lad = V.XCAT.centerline(xcat_surfaces["dias_lad1"]; step = 0.5)
-    imaged_radius(j) = lad.r[
-        argmin(vec(sum(abs2, lad.X .- (tree.a[:, j] .+ tree.b[:, j]) ./ 2; dims = 1))),
-    ]
+    imaged_radius(j) = lad.r[argmin(vec(sum(
+        abs2,
+        lad.X .- (tree.a[:, j] .+ tree.b[:, j]) ./ 2;
+        dims = 1,
+    )))]
     radii = Float32[imaged_radius(j) for j in path]
     lengths = Float32[segment_length(j) for j in path]
     area_fraction(j, r) = min(1.0f0, (r * (1 - DIAMETER_STENOSIS) / tree.r[j])^2)
@@ -1892,27 +1862,14 @@ TRANSPORT_LAD90 = transport_cache("transport_lad90", flows_lad90);
 
 # ╔═╡ 311783a3-e1b0-4ccc-b43f-ebb4ce97c47d
 let fig = Mke.Figure(size = (1500, 560))
-    ax = vessel_axis(
-        fig[1, 1];
-        title = "Arteries ≥ 0.15 mm, the 90% LAD lesion in gold",
-    )
+    ax = vessel_axis(fig[1, 1]; title = "Arteries ≥ 0.15 mm, the 90% LAD lesion in gold")
     draw_myocardium_shell!(ax)
-    draw_vessels!(
-        ax,
-        arteries;
-        colormap = ARTERY_COLOURS,
-        min_radius = 0.15,
-    )
+    draw_vessels!(ax, arteries; colormap = ARTERY_COLOURS, min_radius = 0.15)
     lesion = [
         Mke.Point3f(arteries.a[:, j]) => Mke.Point3f(arteries.b[:, j])
-            for j in LESION.path
+        for j in LESION.path
     ]
-    Mke.linesegments!(
-        ax,
-        lesion;
-        color = :gold,
-        linewidth = 9,
-    )
+    Mke.linesegments!(ax, lesion; color = :gold, linewidth = 9)
 
     panels = (
         ("Healthy · stress MBF", flows.stress, 2),

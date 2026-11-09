@@ -4,8 +4,9 @@
 # (therapy=true): rendered cell outputs as plain HTML + WASM islands where a
 # @bind group compiles — and NO embedded Pluto statefile.
 #
-# Cache is keyed on a SHA-256 fingerprint of the source notebook, the package
-# source, Snapshot's locked source tree, and the export contract (NOT mtime, so
+# Cache is keyed on a SHA-256 fingerprint of the source notebook, the data
+# provenance, the docs lockfiles, this driver, Snapshot's locked source tree and
+# the export contract (NOT the package's src/ or Project.toml, and NOT mtime, so
 # `git checkout` doesn't trigger spurious rebuilds). The fingerprint is
 # embedded in both exported forms; renderer/theme upgrades therefore
 # invalidate cleanly.
@@ -16,7 +17,8 @@
 #   2. `git add docs/notebooks-static/` and commit.
 #   3. CI inherits the rendered HTML, sees a fingerprint match, skips re-render,
 #      deploys what you committed. Re-render only happens when somebody
-#      actually edits a .jl source (or the package source under src/).
+#      edits a notebook, the docs environment or this driver. A package change
+#      that alters what a notebook shows needs that notebook re-rendered by hand.
 #
 # Force a full rebuild with: VASCULATURE_FORCE_NB_REBUILD=1 julia ...
 #
@@ -46,13 +48,26 @@ const SNAPSHOT_UUID = UUID("1e64ef43-5f79-4f6b-8e97-159df4e27032")
 const FORCE_FALLBACK_BONDS = Dict{String, Tuple{Vararg{Symbol}}}(
     # every control drives a CairoMakie figure
     "00_cardiac_pipeline" => (
-        :z_xcat, :z_domain, :min_radius_shown, :z_flow,
-        :healthy_state, :healthy_time, :healthy_z,
-        :stenosis_state, :stenosis_time, :stenosis_z,
+        :z_xcat,
+        :z_domain,
+        :min_radius_shown,
+        :z_flow,
+        :healthy_state,
+        :healthy_time,
+        :healthy_z,
+        :stenosis_state,
+        :stenosis_time,
+        :stenosis_z,
     ),
     "01_pulmonary_pipeline" => (
-        :z_xcat, :y_domain, :min_radius_shown, :y_flow,
-        :healthy_time, :healthy_z, :occluded_time, :occluded_z,
+        :z_xcat,
+        :y_domain,
+        :min_radius_shown,
+        :y_flow,
+        :healthy_time,
+        :healthy_z,
+        :occluded_time,
+        :occluded_z,
     ),
 )
 const EXPORT_CONTRACT = "vasculature-lean-v1|therapy=true|fragment=true|islands=true|verify=true|optimize=size|forced-fallback="
@@ -62,47 +77,35 @@ function notebook_slugs()
     isdir(NOTEBOOKS_DIR) || return String[]
     return [
         splitext(f)[1]
-            for f in sort(readdir(NOTEBOOKS_DIR))
-            if endswith(f, ".jl") && !endswith(f, ".sessions.toml")
+        for f in sort(readdir(NOTEBOOKS_DIR))
+        if endswith(f, ".jl") && !endswith(f, ".sessions.toml")
     ]
 end
 
 """SHA-256 of the source .jl content."""
-source_hash(slug::AbstractString) =
-    bytes2hex(sha256(read(joinpath(NOTEBOOKS_DIR, "$(slug).jl"))))
+source_hash(slug::AbstractString) = bytes2hex(sha256(read(joinpath(
+    NOTEBOOKS_DIR,
+    "$(slug).jl",
+))))
 
-"Hash Project.toml while ignoring the package's release-only version field."
-function project_input_hash(path::AbstractString)
-    content = read(path, String)
-    normalized = replace(
-        content,
-        r"(?m)^version\s*=\s*\"[^\"]*\"\s*$" => "version = \"<release-version>\"",
-    )
-    return bytes2hex(sha256(normalized))
-end
-
-"Digest committed package code and the (optional) committed data provenance."
-const _PACKAGE_INPUT_HASH = Ref{Union{Nothing, String}}(nothing)
-function package_input_hash()
-    _PACKAGE_INPUT_HASH[] === nothing || return _PACKAGE_INPUT_HASH[]::String
+"""
+Digest the committed data provenance (if any). The package's `src/` and `Project.toml` are not
+part of the fingerprint: a code change, a compat bump or a release never stales a page. Re-render
+the notebooks a change affects by hand.
+"""
+const _DATA_INPUT_HASH = Ref{Union{Nothing, String}}(nothing)
+function data_input_hash()
+    _DATA_INPUT_HASH[] === nothing || return _DATA_INPUT_HASH[]::String
     root = dirname(@__DIR__)
-    project = joinpath(root, "Project.toml")
-    files = isfile(DATA_PROVENANCE) ? [DATA_PROVENANCE] : String[]
-    for dir in (joinpath(root, "src"),)
-        isdir(dir) || continue
-        for (base, _, names) in walkdir(dir), name in names
-            path = joinpath(base, name)
-            isfile(path) && push!(files, path)
-        end
-    end
-    entries = [
-        string(relpath(path, root), ":", bytes2hex(sha256(read(path))))
-            for path in sort!(files)
-    ]
-    push!(entries, string("Project.toml:", project_input_hash(project)))
-    sort!(entries)
-    _PACKAGE_INPUT_HASH[] = bytes2hex(sha256(join(entries, '\0')))
-    return _PACKAGE_INPUT_HASH[]::String
+    entries = isfile(DATA_PROVENANCE) ?
+        [string(
+            relpath(DATA_PROVENANCE, root),
+            ":",
+            bytes2hex(sha256(read(DATA_PROVENANCE))),
+        )] :
+        String[]
+    _DATA_INPUT_HASH[] = bytes2hex(sha256(join(entries, '\0')))
+    return _DATA_INPUT_HASH[]::String
 end
 
 """Verify any locally available, ignored datasets against the committed
@@ -135,9 +138,15 @@ function export_fingerprint(slug::AbstractString)
     driver = bytes2hex(sha256(read(@__FILE__)))
     payload = join(
         (
-            source_hash(slug), package_input_hash(), snapshot_tree,
-            build_lock, docs_lock, driver, EXPORT_CONTRACT,
-        ), '\0'
+            source_hash(slug),
+            data_input_hash(),
+            snapshot_tree,
+            build_lock,
+            docs_lock,
+            driver,
+            EXPORT_CONTRACT,
+        ),
+        '\0',
     )
     return bytes2hex(sha256(payload))
 end
@@ -148,10 +157,7 @@ function cached_hash(slug::AbstractString)::Union{String, Nothing}
     out = joinpath(STATIC_OUT, "$(slug).html")
     isfile(out) || return nothing
     html = read(out, String)
-    m = match(
-        Regex("<meta\\s+name=\"$(HASH_META)\"\\s+content=\"([0-9a-f]+)\""),
-        html
-    )
+    m = match(Regex("<meta\\s+name=\"$(HASH_META)\"\\s+content=\"([0-9a-f]+)\""), html)
     return m === nothing ? nothing : m.captures[1]
 end
 
@@ -171,13 +177,12 @@ against the pre-render hash and report when Pluto's normalization shifted
 the source.
 """
 function render_notebook!(
-        session::Pluto.ServerSession,
-        src_path::AbstractString,
-        dst_path::AbstractString
-    )
+    session::Pluto.ServerSession,
+    src_path::AbstractString,
+    dst_path::AbstractString,
+)
     slug = splitext(basename(src_path))[1]
-    html_path = export_notebook(
-        src_path;
+    html_path = export_notebook(src_path;
         output_dir = dirname(dst_path),
         therapy = true, # lean page: SSR cells + islands, NO statefile
         fragment = true, # native inline component for Therapy docs (no iframe)
@@ -194,7 +199,8 @@ function render_notebook!(
     # Embed the source+exporter fingerprint for the rebuild cache.
     meta = """<meta name="$(HASH_META)" content="$(fingerprint)">"""
     html = read(html_path, String)
-    html = occursin("<head>", html) ? replace(html, "<head>" => "<head>" * meta; count = 1) :
+    html = occursin("<head>", html) ?
+        replace(html, "<head>" => "<head>" * meta; count = 1) :
         html * "\n" * meta * "\n"
     write(html_path, html)
     # export_notebook names the file after the notebook stem == our slug, so
@@ -202,7 +208,8 @@ function render_notebook!(
     abspath(html_path) == abspath(dst_path) ||
         error("export wrote $(html_path) but the gallery expects $(dst_path)")
     fragment_path = replace(html_path, r"\.html$" => ".fragment.html")
-    isfile(fragment_path) || error("Snapshot did not emit expected fragment: $(fragment_path)")
+    isfile(fragment_path) ||
+        error("Snapshot did not emit expected fragment: $(fragment_path)")
     fragment = read(fragment_path, String)
     marker = "<!-- $(HASH_META): $(fingerprint) -->"
     write(fragment_path, marker * "\n" * fragment)
@@ -214,7 +221,9 @@ list). Comma-separated env var. Example:
     VASCULATURE_SKIP_NOTEBOOKS=00_cardiac_pipeline julia --project=docs docs/app.jl build
 """
 function skipped_slugs()
-    return Set(strip.(split(get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""), ","; keepempty = false)))
+    return Set(
+        strip.(split(get(ENV, "VASCULATURE_SKIP_NOTEBOOKS", ""), ","; keepempty = false)),
+    )
 end
 
 """Walk every notebook, rendering only those whose export fingerprint doesn't
@@ -227,10 +236,14 @@ function export_notebooks()
     if !isempty(skip)
         kept = filter(s -> !(s in skip), slugs)
         dropped = filter(s -> s in skip, slugs)
-        isempty(dropped) || println("[notebooks] VASCULATURE_SKIP_NOTEBOOKS → skipping $(join(dropped, ", "))")
+        isempty(dropped) ||
+            println(
+                "[notebooks] VASCULATURE_SKIP_NOTEBOOKS → skipping $(join(dropped, ", "))",
+            )
         slugs = kept
     end
-    isempty(slugs) && (println("[notebooks] no .jl files in $(NOTEBOOKS_DIR)"); return slugs)
+    isempty(slugs) &&
+        (println("[notebooks] no .jl files in $(NOTEBOOKS_DIR)"); return slugs)
 
     isdir(STATIC_OUT) || mkpath(STATIC_OUT)
 
@@ -238,13 +251,16 @@ function export_notebooks()
     to_render = force ? slugs : filter(needs_rebuild, slugs)
 
     if isempty(to_render)
-        println("[notebooks] all $(length(slugs)) cached (export fingerprint matches) — no rebuild")
+        println(
+            "[notebooks] all $(length(slugs)) cached (export fingerprint matches) — no rebuild",
+        )
         return slugs
     end
 
     println(
         "[notebooks] rendering $(length(to_render))/$(length(slugs)) " *
-            (force ? "(forced)" : "(source changed)") * "…"
+            (force ? "(forced)" : "(source changed)") *
+            "…",
     )
 
     # disable_writing_notebook_files=true: keep Pluto from re-saving the
@@ -260,7 +276,9 @@ function export_notebooks()
         t0 = time()
         post_hash = render_notebook!(session, src, dst)
         if post_hash != pre_hash
-            println("    ⚠ Pluto normalized source: hash $(first(pre_hash, 12))… → $(first(post_hash, 12))… (embedding post-render hash so cache stays consistent)")
+            println(
+                "    ⚠ Pluto normalized source: hash $(first(pre_hash, 12))… → $(first(post_hash, 12))… (embedding post-render hash so cache stays consistent)",
+            )
         end
         kb = round(filesize(dst) / 1024; digits = 1)
         println("    ✓ $(round(time() - t0; digits = 1))s  →  $(kb) KB")

@@ -37,10 +37,14 @@ behaviour, used to verify the port against the Python:
 `postprocess(...; mass = :upstream, elements = :upstream)` reproduces the Python outputs.
 """
 function postprocess(
-        xml_path::AbstractString, prefix::AbstractString; domain_vol = nothing,
-        mass::Symbol = :mask, elements::Symbol = :series, obj::Bool = true,
-        verbose::Bool = true
-    )
+    xml_path::AbstractString,
+    prefix::AbstractString;
+    domain_vol = nothing,
+    mass::Symbol = :mask,
+    elements::Symbol = :series,
+    obj::Bool = true,
+    verbose::Bool = true,
+)
     mkpath(dirname(abspath(prefix)))
     t = read_tree_xml(xml_path)
     diameters = 2 .* t.radius
@@ -51,7 +55,10 @@ function postprocess(
     cmean, cse = connectivity_mean_se(present, counts)
     stats = diameter_stats_per_order(orders, diameters)
     files = String[]
-    push!(files, write_connectivity_csv(prefix * "_connectivity_matrix.csv", present, cmean, cse))
+    push!(
+        files,
+        write_connectivity_csv(prefix * "_connectivity_matrix.csv", present, cmean, cse),
+    )
     push!(files, write_diameter_stats_csv(prefix * "_diameter_stats.csv", stats))
     push!(files, write_diameter_ranges_csv(prefix * "_diameter_ranges.csv", stats))
     push!(files, write_tree_vtp(prefix * "_tree.vtp", t, orders))
@@ -65,19 +72,34 @@ function postprocess(
             ws = hemo.wss_stress
             println(
                 "[hemo] lumped solve at resting $PERF_REST and stress $PERF_STRESS mL/min/g, ",
-                "inlet 100 mmHg; stress per-order WSS ", _pyfmt(minimum(ws), 0), "-",
-                _pyfmt(maximum(ws), 0), " dyn/cm2 -> $(prefix)_hemodynamics.csv"
+                "inlet 100 mmHg; stress per-order WSS ",
+                _pyfmt(minimum(ws), 0),
+                "-",
+                _pyfmt(maximum(ws), 0),
+                " dyn/cm2 -> $(prefix)_hemodynamics.csv",
             )
         end
     end
 
     result = (
-        tree = t, diameters = diameters, orders = orders, strahler = ord.strahler,
-        seg2elem = ord.seg2elem, elem_order = ord.elem_order,
+        tree = t,
+        diameters = diameters,
+        orders = orders,
+        strahler = ord.strahler,
+        seg2elem = ord.seg2elem,
+        elem_order = ord.elem_order,
         connectivity = (order = present, mean = cmean, se = cse),
-        diameter_stats = stats, hemodynamics = hemo, files = files,
+        diameter_stats = stats,
+        hemodynamics = hemo,
+        files = files,
     )
-    verbose && println("[postprocess] root order=", maximum(orders; init = 0), ". Wrote: ", join(files, ", "))
+    verbose &&
+        println(
+            "[postprocess] root order=",
+            maximum(orders; init = 0),
+            ". Wrote: ",
+            join(files, ", "),
+        )
     return result
 end
 
