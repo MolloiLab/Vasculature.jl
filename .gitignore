@@ -32,7 +32,7 @@ docs/package-lock.json
 # docs/notebooks-static/ is INTENTIONALLY tracked: rendered Pluto HTML
 # (with an export fingerprint) ships with the repo so CI inherits whatever
 # was rendered locally on GPU hardware. extract_all.jl only re-renders
-# when the fingerprint (notebook, src/, locks, exporter) changes.
+# when the fingerprint (notebook, data provenance, locks, exporter) changes.
 
 # Local notebook datasets (XCAT phantoms and other licensed data) — never tracked.
 docs/notebooks/data/

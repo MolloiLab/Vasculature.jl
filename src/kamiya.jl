@@ -11,12 +11,23 @@ One call of upstream `kamyiaOptimization(..., nbIter = 1, ...)`. `(pL, rL, fL)` 
 left segment (the old segment's distal part) and `(pR, rR, fR)` the new terminal.
 """
 @inline function kamiya_optimization(
-        gamma::T, lf::T, pCurrent::P3{T}, pParent::P3{T}, rCurrent::T,
-        pL::P3{T}, rL::T, fL::T, pR::P3{T}, rR::T, fR::T
-    ) where {T}
+    gamma::T,
+    lf::T,
+    pCurrent::P3{T},
+    pParent::P3{T},
+    rCurrent::T,
+    pL::P3{T},
+    rL::T,
+    fL::T,
+    pR::P3{T},
+    rR::T,
+    fR::T,
+) where {T}
     o = one(T)
     R0 = rCurrent * rCurrent
-    f1 = fL; f2 = fR; f0 = f1 + f2
+    f1 = fL
+    f2 = fR
+    f0 = f1 + f2
     ratioSeed = o
     (f2 > 0 && f1 > 0) && (ratioSeed = upow(f1 / f2, T(0.25)))
     bLs = upow(o / (o + upow(o / ratioSeed, -gamma)), o / gamma)
@@ -29,7 +40,11 @@ left segment (the old segment's distal part) and `(pR, rR, fR)` the new terminal
     w1 = ((f0 * pParent[1] + f1 * pL[1]) + f2 * pR[1]) / den
     w2 = ((f0 * pParent[2] + f1 * pL[2]) + f2 * pR[2]) / den
     w3 = ((f0 * pParent[3] + f1 * pL[3]) + f2 * pR[3]) / den
-    pb = (isfinite(w1) ? w1 : pCurrent[1], isfinite(w2) ? w2 : pCurrent[2], isfinite(w3) ? w3 : pCurrent[3])
+    pb = (
+        isfinite(w1) ? w1 : pCurrent[1],
+        isfinite(w2) ? w2 : pCurrent[2],
+        isfinite(w3) ? w3 : pCurrent[3],
+    )
     l0 = norm3(sub3(pParent, pb)) * lf
     l1 = norm3(sub3(pL, pb)) * lf
     l2 = norm3(sub3(pR, pb)) * lf
@@ -38,8 +53,11 @@ left segment (the old segment's distal part) and `(pR, rR, fR)` the new terminal
     ok, rr1, rr2, _ = kamiya_ceres(gamma, dP1, dP2, f0, f1, f2, l0, l1, l2, R1, R2)
     # Equation 27, evaluated whether or not the solve succeeded (as upstream does).
     R0 = upow(f0 * (upow(rr1, gamma) / f1 + upow(rr2, gamma) / f2), o / gamma)
-    R1 = rr1; R2 = rr2
-    q0 = R0 / l0; q1 = R1 / l1; q2 = R2 / l2
+    R1 = rr1
+    R2 = rr2
+    q0 = R0 / l0
+    q1 = R1 / l1
+    q2 = R2 / l2
     dsum = (q0 + q1) + q2
     pb = (
         (((pParent[1] * R0) / l0 + (pL[1] * R1) / l1) + (pR[1] * R2) / l2) / dsum,

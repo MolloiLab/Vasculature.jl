@@ -8,7 +8,10 @@
 # and the upper order's mean - SD, evaluated left to right as numpy does.
 # Any organ's reference morphometry (per-order mean and SD diameter, same units as the tree's
 # diameters) gives its own boundaries; Kassab's coronary arrays are upstream's.
-_literature_boundaries(mu, sd) = [(((mu[k + 1] + sd[k + 1]) + mu[k]) - sd[k]) / 2.0 for k in 1:(length(mu) - 1)]
+_literature_boundaries(mu, sd) = [
+    (((mu[k + 1] + sd[k + 1]) + mu[k]) - sd[k]) / 2.0
+    for k in 1:(length(mu) - 1)
+]
 const _LITERATURE_DB = _literature_boundaries(LITERATURE_MU, LITERATURE_SD)
 
 # Ports literature_order_of: 11 minus the number of boundaries above d, clipped to 1..11
@@ -64,14 +67,16 @@ end
 # discovery order of each run is kept because numpy's pairwise mean depends on it.
 function group_strahler_elements(strahler::Vector{Int}, conn, n::Int)
     seg2elem = fill(0, n)
-    off = [1]; val = Int32[]                   # elements as one flat list (see Ragged), in discovery order
+    off = [1]
+    val = Int32[] # elements as one flat list (see Ragged), in discovery order
     stk = Int[]
     for s in 1:n
         seg2elem[s] == 0 || continue
         o = strahler[s]
         e = length(off)
         seg2elem[s] = e
-        push!(stk, s); push!(val, s)
+        push!(stk, s)
+        push!(val, s)
         while !isempty(stk)
             cur = pop!(stk)
             for nb in Iterators.flatten((conn.parent[cur], conn.children[cur]))
@@ -89,7 +94,14 @@ end
 
 # Ports refine_root_element: if the root's element spans more than one literature order, split
 # it into maximal connected runs of equal literature order (the first run keeps the element id).
-function refine_root_element(seg2elem, elem_segs, elem_order, diameters, conn, db = _LITERATURE_DB)
+function refine_root_element(
+    seg2elem,
+    elem_segs,
+    elem_order,
+    diameters,
+    conn,
+    db = _LITERATURE_DB,
+)
     n = length(seg2elem)
     root = findfirst(s -> isempty(conn.parent[s]), 1:n)
     root === nothing && return seg2elem, elem_segs, elem_order
@@ -130,10 +142,15 @@ function refine_root_element(seg2elem, elem_segs, elem_order, diameters, conn, d
         end
     end
     # element e0 becomes the first run, the others are appended (same lists as upstream's)
-    lists = Iterators.flatten(((e == e0 ? comps[1] : elem_segs[e] for e in 1:length(elem_segs)), comps[2:end]))
-    off = [1]; val = Int32[]
+    lists = Iterators.flatten((
+        (e == e0 ? comps[1] : elem_segs[e] for e in eachindex(elem_segs)),
+        comps[2:end],
+    ))
+    off = [1]
+    val = Int32[]
     for l in lists
-        append!(val, l); push!(off, length(val) + 1)
+        append!(val, l)
+        push!(off, length(val) + 1)
     end
     return seg2elem, Ragged(off, val), elem_order
 end
@@ -143,23 +160,32 @@ end
 function element_connectivity_counts(seg2elem, elem_order, conn)
     ne = length(elem_order)
     # segments of each element (counting sort), then each element's distinct daughter elements
-    cnt = zeros(Int, ne); foreach(e -> cnt[e] += 1, seg2elem)
-    off = cumsum(vcat(1, cnt)); segs = Vector{Int32}(undef, length(seg2elem)); nxt = off[1:(end - 1)]
+    cnt = zeros(Int, ne)
+    foreach(e -> cnt[e] += 1, seg2elem)
+    off = cumsum(vcat(1, cnt))
+    segs = Vector{Int32}(undef, length(seg2elem))
+    nxt = off[1:(end - 1)]
     for s in eachindex(seg2elem)
-        e = seg2elem[s]; segs[nxt[e]] = s; nxt[e] += 1
+        e = seg2elem[s]
+        segs[nxt[e]] = s
+        nxt[e] += 1
     end
     present = sort(unique(elem_order))
-    slot = zeros(Int, maximum(present; init = 0)); for (i, m) in enumerate(present)
+    slot = zeros(Int, maximum(present; init = 0))
+    for (i, m) in enumerate(present)
         slot[m] = i
     end
     counts = Dict((m, p) => Int32[] for m in present for p in present)
-    buf = Int32[]; tally = zeros(Int32, length(present))
+    buf = Int32[]
+    tally = zeros(Int32, length(present))
     for e in 1:ne
         empty!(buf)
         for k in off[e]:(off[e + 1] - 1), c in conn.children[segs[k]]
-            b = seg2elem[c]; b == e || push!(buf, b)
+            b = seg2elem[c]
+            b == e || push!(buf, b)
         end
-        unique!(sort!(buf)); fill!(tally, 0)
+        unique!(sort!(buf))
+        fill!(tally, 0)
         for b in buf
             tally[slot[elem_order[b]]] += 1
         end
@@ -187,17 +213,27 @@ labelled against (same units as `diameters`; default Kassab 1993's coronary arra
 Another organ passes its own, e.g. Huang et al. 1996's pulmonary arteries.
 """
 function diameter_defined_orders(
-        t::PPTree, diameters::Vector{Float64} = 2 .* t.radius; elements::Symbol = :series,
-        reference = (LITERATURE_MU, LITERATURE_SD)
-    )
-    elements in (:series, :upstream) || throw(ArgumentError("elements must be :series or :upstream, got :$elements"))
+    t::PPTree,
+    diameters::Vector{Float64} = 2 .* t.radius;
+    elements::Symbol = :series,
+    reference = (LITERATURE_MU, LITERATURE_SD),
+)
+    elements in (:series, :upstream) ||
+        throw(ArgumentError("elements must be :series or :upstream, got :$elements"))
     n = nsegments(t)
     conn = segment_connections(t; siblings = elements === :upstream)
     strahler = strahler_orders_per_segment(conn, n)
     seg2elem, elem_segs = group_strahler_elements(strahler, conn, n)
     db = _literature_boundaries(reference...)
     elem_order = [literature_order_of(_np_mean(diameters[c]), db) for c in elem_segs]
-    seg2elem, elem_segs, elem_order = refine_root_element(seg2elem, elem_segs, elem_order, diameters, conn, db)
+    seg2elem, elem_segs, elem_order = refine_root_element(
+        seg2elem,
+        elem_segs,
+        elem_order,
+        diameters,
+        conn,
+        db,
+    )
     orders = [elem_order[seg2elem[s]] for s in 1:n]
     return (; orders, strahler, seg2elem, elem_segs, elem_order, conn)
 end

@@ -1,0 +1,21 @@
+# Fatou (https://fatou.dev) checks formatting and lint with its defaults. Run `fatou format .` and
+# `docs/fatou_notebooks.sh` before pushing; this only checks, it never commits.
+name: Fatou
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  fatou:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # the package, tests and docs code (fatou.toml leaves docs/notebooks/ to the next step)
+      - uses: jolars/fatou-action@v1
+        with:
+          version: v0.26.1
+      # the Pluto notebooks' cells, without the header Pluto regenerates on every save
+      - name: Notebooks
+        run: docs/fatou_notebooks.sh --check

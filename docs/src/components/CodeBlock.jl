@@ -10,9 +10,11 @@ A dark code listing with a copy badge. `id` names the listing's `<pre>`, for lin
 """
 function CodeBlock(code::AbstractString; language::AbstractString = "julia", id = nothing)
     return Div(
-        Symbol("data-codeblock") => "", :class => "relative",
+        Symbol("data-codeblock") => "",
+        :class => "relative",
         RawHtml(_COPY_BUTTON),
-        id === nothing ? Pre(:class => "tv-pre", Code(:class => "language-$language", code)) :
+        id === nothing ?
+            Pre(:class => "tv-pre", Code(:class => "language-$language", code)) :
             Pre(:class => "tv-pre", :id => id, Code(:class => "language-$language", code)),
     )
 end

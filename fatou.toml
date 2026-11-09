@@ -1,0 +1,4 @@
+# Fatou (https://fatou.dev) formats and lints this repository with its defaults.
+# The Pluto notebooks are excluded here and handled by docs/fatou_notebooks.sh, which leaves
+# the header Pluto regenerates on every save alone.
+exclude = ["docs/notebooks/"]

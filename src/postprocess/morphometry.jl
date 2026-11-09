@@ -23,7 +23,12 @@ function write_connectivity_csv(path, present, mean, se)
         for (i, m) in enumerate(present)
             row = [string(m)]
             for j in eachindex(present)
-                push!(row, mean[i, j] < 0.005 ? "0" : _pyfmt(mean[i, j], 3) * " ± " * _pyfmt(se[i, j], 3))
+                push!(
+                    row,
+                    mean[i, j] < 0.005 ?
+                        "0" :
+                        _pyfmt(mean[i, j], 3) * " ± " * _pyfmt(se[i, j], 3),
+                )
             end
             _csvrow(io, row)
         end
@@ -37,9 +42,14 @@ function diameter_stats_per_order(orders::Vector{Int}, diameters::Vector{Float64
     ords = sort(unique(orders))
     vals = [diameters[orders .== o] for o in ords]
     return (
-        order = ords, mean = _np_mean.(vals), sd = [_np_std(v; ddof = 1) for v in vals],
-        min = minimum.(vals), max = maximum.(vals), median = _np_median.(vals),
-        q25 = [_np_percentile(v, 25) for v in vals], q75 = [_np_percentile(v, 75) for v in vals],
+        order = ords,
+        mean = _np_mean.(vals),
+        sd = [_np_std(v; ddof = 1) for v in vals],
+        min = minimum.(vals),
+        max = maximum.(vals),
+        median = _np_median.(vals),
+        q25 = [_np_percentile(v, 25) for v in vals],
+        q75 = [_np_percentile(v, 75) for v in vals],
     )
 end
 

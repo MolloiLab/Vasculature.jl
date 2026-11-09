@@ -28,7 +28,8 @@ The number of the tissue voxel at grid index `k` (a tuple), or of the nearest on
 function nearest_tissue_voxel(numbers::AbstractArray{Int32, 3}, k)
     dims = size(numbers)
     all(1 .<= k .<= dims) && numbers[k...] > 0 && return numbers[k...]
-    best = typemax(Int); number = Int32(0)
+    best = typemax(Int)
+    number = Int32(0)
     for di in -2:2, dj in -2:2, dk in -2:2
         n = k .+ (di, dj, dk)
         all(1 .<= n .<= dims) || continue
@@ -56,7 +57,8 @@ Of `segments` ([`imaged_segments`](@ref)), the one whose surface is nearest to `
 distance from `p` to its surface (mm; negative inside the lumen).
 """
 function nearest_segment((indices, starts, ends, radii), p)
-    best = Inf32; nearest = 1
+    best = Inf32
+    nearest = 1
     for k in eachindex(radii)
         axis = ends[:, k] .- starts[:, k]
         offset = Float32.(p) .- starts[:, k]
@@ -79,7 +81,7 @@ struct SegmentIndex{S}
     origin::NTuple{3, Float64}
     cell::Float64
     dims::NTuple{3, Int}
-    first::Vector{Int}   # cell c's segments are members[first[c]:(first[c + 1] - 1)]
+    first::Vector{Int} # cell c's segments are members[first[c]:(first[c + 1] - 1)]
     members::Vector{Int32}
 end
 
@@ -92,21 +94,34 @@ a lumen; `cell` is the bucket size (mm).
 function segment_index(segments; reach::Real, cell::Real = 4.0)
     _, starts, ends, radii = segments
     pad = maximum(radii; init = 0.0f0) + reach
-    lo = Tuple(min.(vec(minimum(starts; dims = 2)), vec(minimum(ends; dims = 2))) .- pad .- cell)
-    hi = Tuple(max.(vec(maximum(starts; dims = 2)), vec(maximum(ends; dims = 2))) .+ pad .+ cell)
+    lo = Tuple(
+        min.(vec(minimum(starts; dims = 2)), vec(minimum(ends; dims = 2))) .- pad .- cell,
+    )
+    hi = Tuple(
+        max.(vec(maximum(starts; dims = 2)), vec(maximum(ends; dims = 2))) .+ pad .+ cell,
+    )
     dims = Tuple(ceil.(Int, (hi .- lo) ./ cell))
     lists = [Int32[] for _ in 1:prod(dims)]
     L = LinearIndices(dims)
     for k in eachindex(radii)
         r = radii[k] + reach
-        a = min.(starts[:, k], ends[:, k]) .- r; b = max.(starts[:, k], ends[:, k]) .+ r
-        ia = clamp.(floor.(Int, (a .- lo) ./ cell) .+ 1, 1, dims); ib = clamp.(floor.(Int, (b .- lo) ./ cell) .+ 1, 1, dims)
+        a = min.(starts[:, k], ends[:, k]) .- r
+        b = max.(starts[:, k], ends[:, k]) .+ r
+        ia = clamp.(floor.(Int, (a .- lo) ./ cell) .+ 1, 1, dims)
+        ib = clamp.(floor.(Int, (b .- lo) ./ cell) .+ 1, 1, dims)
         for z in ia[3]:ib[3], y in ia[2]:ib[2], x in ia[1]:ib[1]
             push!(lists[L[x, y, z]], Int32(k))
         end
     end
     first = cumsum([1; length.(lists)])
-    return SegmentIndex(segments, Float64.(lo), Float64(cell), dims, first, reduce(vcat, lists; init = Int32[]))
+    return SegmentIndex(
+        segments,
+        Float64.(lo),
+        Float64(cell),
+        dims,
+        first,
+        reduce(vcat, lists; init = Int32[]),
+    )
 end
 
 """
@@ -120,7 +135,8 @@ function nearest_segment(ix::SegmentIndex, p)
     c = floor.(Int, (p .- ix.origin) ./ ix.cell) .+ 1
     all(1 .<= c .<= ix.dims) || return (0, Inf32)
     l = LinearIndices(ix.dims)[c...]
-    best = Inf32; nearest = 0
+    best = Inf32
+    nearest = 0
     for m in ix.first[l]:(ix.first[l + 1] - 1)
         k = ix.members[m]
         axis = ends[:, k] .- starts[:, k]
@@ -151,21 +167,32 @@ function _squared_distance(inside::AbstractArray{Bool, 3})
         others = [dims[d] for d in 1:3 if d != axis]
         m = dims[axis]
         AK.foreachindex(1:prod(others); min_elems = 1) do line
-            f = Vector{Float64}(undef, m); v = Vector{Int}(undef, m); z = Vector{Float64}(undef, m + 1)
-            a = (line - 1) % others[1] + 1; b = (line - 1) ÷ others[1] + 1
+            f = Vector{Float64}(undef, m)
+            v = Vector{Int}(undef, m)
+            z = Vector{Float64}(undef, m + 1)
+            a = (line - 1) % others[1] + 1
+            b = (line - 1) ÷ others[1] + 1
             index(u) = axis == 1 ? (u, a, b) : axis == 2 ? (a, u, b) : (a, b, u)
             for u in 1:m
-                f[u] = axis == 1 ? (inside[index(u)...] ? 0.0 : 1.0e20) : distance[index(u)...]
+                f[u] = axis == 1 ?
+                    (inside[index(u)...] ? 0.0 : 1.0e20) :
+                    distance[index(u)...]
             end
             # the lower envelope of the parabolas rooted at every sample
-            k = 1; v[1] = 1; z[1] = -Inf; z[2] = Inf
+            k = 1
+            v[1] = 1
+            z[1] = -Inf
+            z[2] = Inf
             for u in 2:m
                 s = ((f[u] + u^2) - (f[v[k]] + v[k]^2)) / (2 * (u - v[k]))
                 while s <= z[k]
                     k -= 1
                     s = ((f[u] + u^2) - (f[v[k]] + v[k]^2)) / (2 * (u - v[k]))
                 end
-                k += 1; v[k] = u; z[k] = s; z[k + 1] = Inf
+                k += 1
+                v[k] = u
+                z[k] = s
+                z[k + 1] = Inf
             end
             k = 1
             for u in 1:m
@@ -203,40 +230,74 @@ arch's top the descending aorta carries its own, smaller flow, so it is timed fr
 brachiocephalic voxel is timed from the SVC's top (`confluence_ml`). Returns `(; origin_mm, h, tree, volume, descending,
 apex_ml, confluence_ml, tree_ml, ostia_ml)`; `ostia_ml` is the aorta's volume where the coronary arteries (label 26) leave it.
 """
-function great_vessel_transit(labels::AbstractArray{UInt8, 3}, origin, h::Real; cell_mm::Real = 1.0, svc_mm::Real = 70)
+function great_vessel_transit(
+    labels::AbstractArray{UInt8, 3},
+    origin,
+    h::Real;
+    cell_mm::Real = 1.0,
+    svc_mm::Real = 70,
+)
     step = round(Int, cell_mm / h)
     coarse = labels[1:step:end, 1:step:end, 1:step:end]
     hc = step * h
-    sides = (CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0), CartesianIndex(0, 1, 0), CartesianIndex(0, -1, 0), CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1))
-    touches(c, label) = any(s -> checkbounds(Bool, coarse, c + s) && coarse[c + s] == label, sides)
-    tree = zeros(UInt8, size(coarse)); distance = fill(Int32(-1), size(coarse))
-    order = Dict(t => CartesianIndex{3}[] for t in 0x01:0x07) # each tree's cells, nearest the heart first
+    sides = (
+        CartesianIndex(1, 0, 0),
+        CartesianIndex(-1, 0, 0),
+        CartesianIndex(0, 1, 0),
+        CartesianIndex(0, -1, 0),
+        CartesianIndex(0, 0, 1),
+        CartesianIndex(0, 0, -1),
+    )
+    touches(c, label) = any(
+        s -> checkbounds(Bool, coarse, c + s) && coarse[c + s] == label,
+        sides,
+    )
+    tree = zeros(UInt8, size(coarse))
+    distance = fill(Int32(-1), size(coarse))
+    order = Dict(
+        t => CartesianIndex{3}[]
+        for t in 0x01:0x07
+    ) # each tree's cells, nearest the heart first
     # grows trees from their seeds at once, breadth first: a cell joins the first tree to reach it
     function grow!(seeds, allowed)
         queue = CartesianIndex{3}[]
         for (c, t) in seeds
             tree[c] == 0 || continue
-            tree[c] = t; distance[c] = 0; push!(queue, c)
+            tree[c] = t
+            distance[c] = 0
+            push!(queue, c)
         end
         head = 1
         while head <= length(queue)
-            c = queue[head]; head += 1
+            c = queue[head]
+            head += 1
             for s in sides
                 n = c + s
-                checkbounds(Bool, coarse, n) && tree[n] == 0 && allowed(n, tree[c]) || continue
-                tree[n] = tree[c]; distance[n] = distance[c] + 1; push!(queue, n)
+                checkbounds(Bool, coarse, n) &&
+                    tree[n] == 0 &&
+                    allowed(n, tree[c]) || continue
+                tree[n] = tree[c]
+                distance[n] = distance[c] + 1
+                push!(queue, n)
             end
         end
         foreach(c -> push!(order[tree[c]], c), queue)
         return nothing
     end
-    seeds(label, blood, t) = [(c, t) for c in CartesianIndices(coarse) if coarse[c] == label && touches(c, blood)]
+    seeds(label, blood, t) = [
+        (c, t)
+        for c in CartesianIndices(coarse)
+        if coarse[c] == label && touches(c, blood)
+    ]
     grow!(seeds(0x19, 0x14, 0x02), (n, t) -> coarse[n] in (0x19, 0x7d) && !touches(n, 0x1c))
     grow!(seeds(0x1c, 0x13, 0x01), (n, t) -> coarse[n] in (0x1c, 0x19))
     caval = seeds(0x18, 0x16, 0x00)
     z_middle = sort([c[3] for (c, _) in caval])[(length(caval) + 1) ÷ 2]
     grow!(
-        [[(c, c[3] >= z_middle ? 0x03 : 0x04) for (c, _) in caval]; seeds(0x18, 0x15, 0x05)],
+        [
+            [(c, c[3] >= z_middle ? 0x03 : 0x04) for (c, _) in caval]
+            seeds(0x18, 0x15, 0x05)
+        ],
         (n, t) -> coarse[n] == 0x18 || (t == 0x05 && coarse[n] == 0x7c),
     )
     # volumes nearer the heart, tree by tree
@@ -244,7 +305,8 @@ function great_vessel_transit(labels::AbstractArray{UInt8, 3}, origin, h::Real; 
     volume = fill(NaN32, size(coarse))
     for (t, cells) in order
         counted(c) = t != 0x01 || coarse[c] == 0x1c
-        nearer = 0; before = 0
+        nearer = 0
+        before = 0
         for (k, c) in enumerate(cells)
             k > 1 && distance[c] > distance[cells[k - 1]] && (before = nearer)
             volume[c] = before * cell_ml
@@ -269,8 +331,13 @@ function great_vessel_transit(labels::AbstractArray{UInt8, 3}, origin, h::Real; 
         tree[c] = (c[1] < svc_x) == right_is_low_x ? 0x06 : 0x07
     end
     return (
-        origin_mm = Tuple(Float64.(origin)), h = hc, tree = tree, volume = volume, descending = descending,
-        apex_ml = Float32(volume[apex]), confluence_ml = Float32(confluence_ml),
+        origin_mm = Tuple(Float64.(origin)),
+        h = hc,
+        tree = tree,
+        volume = volume,
+        descending = descending,
+        apex_ml = Float32(volume[apex]),
+        confluence_ml = Float32(confluence_ml),
         tree_ml = Dict(t => count(==(t), tree) * cell_ml for t in 0x01:0x07),
         ostia_ml = sort([volume[c] for c in aorta if touches(c, 0x1a)]),
     )
@@ -288,14 +355,18 @@ function scale_tree(transit, tree::UInt8, k::Real)
     volume = copy(transit.volume)
     on = transit.tree .== tree
     volume[on] .*= Float32(k)
-    aorta = tree == 0x01; svc = tree == 0x03
+    aorta = tree == 0x01
+    svc = tree == 0x03
     return merge(
-        transit, (;
+        transit,
+        (;
             volume,
             apex_ml = aorta ? Float32(k) * transit.apex_ml : transit.apex_ml,
             ostia_ml = aorta ? Float32(k) .* transit.ostia_ml : transit.ostia_ml,
-            confluence_ml = svc ? Float32(k) * transit.confluence_ml : transit.confluence_ml,
-        )
+            confluence_ml = svc ?
+                Float32(k) * transit.confluence_ml :
+                transit.confluence_ml,
+        ),
     )
 end
 
@@ -307,21 +378,28 @@ between it and the heart, interpolated trilinearly over the tree's cells around 
 nearest cell on the tree's value.
 """
 function vessel_volume_at(transit, p, t)
-    volume = transit.volume; tree = transit.tree
+    volume = transit.volume
+    tree = transit.tree
     f = (p .- transit.origin_mm) ./ transit.h .+ 1
-    k = floor.(Int, f); w = f .- k
-    sum_v = 0.0f0; sum_w = 0.0f0
+    k = floor.(Int, f)
+    w = f .- k
+    sum_v = 0.0f0
+    sum_w = 0.0f0
     for corner in CartesianIndices((0:1, 0:1, 0:1))
         c = CartesianIndex(k .+ Tuple(corner))
         checkbounds(Bool, volume, c) && tree[c] == t && !isnan(volume[c]) || continue
         wc = Float32(prod(ifelse.(Tuple(corner) .== 1, w, 1 .- w)))
-        sum_v += wc * volume[c]; sum_w += wc
+        sum_v += wc * volume[c]
+        sum_w += wc
     end
     sum_w > 0 && return sum_v / sum_w
     best = Inf32
     for step in CartesianIndices((-1:1, -1:1, -1:1))
         c = CartesianIndex(round.(Int, f)) + step
-        checkbounds(Bool, volume, c) && tree[c] == t && !isnan(volume[c]) && (best = min(best, volume[c]))
+        checkbounds(Bool, volume, c) &&
+            tree[c] == t &&
+            !isnan(volume[c]) &&
+            (best = min(best, volume[c]))
     end
     return isfinite(best) ? best : 0.0f0
 end
@@ -335,8 +413,10 @@ The great-vessel tree the voxel at `p` (mm) is on: of `candidates`, the one most
 function vessel_tree_at(transit, p, candidates)
     tree = transit.tree
     f = (p .- transit.origin_mm) ./ transit.h .+ 1
-    k = floor.(Int, f); w = f .- k
-    best = 0x00; best_w = 0.0f0
+    k = floor.(Int, f)
+    w = f .- k
+    best = 0x00
+    best_w = 0.0f0
     for t in candidates
         wt = 0.0f0
         for corner in CartesianIndices((0:1, 0:1, 0:1))
@@ -367,11 +447,17 @@ function great_vessel_pool(transit, p, t)
     if t == 0x01
         c = CartesianIndex(round.(Int, (p .- transit.origin_mm) ./ transit.h) .+ 1)
         descending = checkbounds(Bool, transit.descending, c) && transit.descending[c]
-        return descending ? (_PHANTOM.VOX_POOL, Int32(27), max(ml - transit.apex_ml, 0.0f0)) : (_PHANTOM.VOX_POOL, Int32(5), ml)
+        return descending ?
+            (_PHANTOM.VOX_POOL, Int32(27), max(ml - transit.apex_ml, 0.0f0)) :
+            (_PHANTOM.VOX_POOL, Int32(5), ml)
     end
     t == 0x02 && return (_PHANTOM.VOX_POOL, Int32(6), ml)
     t == 0x03 && return (_PHANTOM.VOX_POOL, Int32(8), ml)
     t == 0x04 && return (_PHANTOM.VOX_POOL, Int32(11), ml)
     t == 0x05 && return (_PHANTOM.VOX_POOL, Int32(7), ml)
-    return (_PHANTOM.VOX_POOL, Int32(t == 0x06 ? 9 : 10), max(ml - transit.confluence_ml, 0.0f0))
+    return (
+        _PHANTOM.VOX_POOL,
+        Int32(t == 0x06 ? 9 : 10),
+        max(ml - transit.confluence_ml, 0.0f0),
+    )
 end

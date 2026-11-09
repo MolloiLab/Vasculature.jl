@@ -30,19 +30,25 @@ function check_ceres_file(path; show = 5)
         if y1 === v[12] && y2 === v[13] && ok == usable && it == iters && t == term
             exact += 1
         elseif total - exact <= show
-            @info "Ceres mismatch" path line = total expected = (v[12], v[13], usable, iters, term) got = (y1, y2, ok, it, t)
+            @info "Ceres mismatch" path line = total expected = (
+                v[12],
+                v[13],
+                usable,
+                iters,
+                term,
+            ) got = (y1, y2, ok, it, t)
         end
     end
     return exact, total
 end
 
 @testset "kamiya_ceres matches Ceres 2.2.0 bitwise" begin
-    files = isdir(CERES_DIR) ? sort(
-            filter(
-                f -> startswith(basename(f), "ceres_") && endswith(f, ".txt"),
-                readdir(CERES_DIR; join = true)
-            )
-        ) : String[]
+    files = isdir(CERES_DIR) ?
+        sort(filter(
+            f -> startswith(basename(f), "ceres_") && endswith(f, ".txt"),
+            readdir(CERES_DIR; join = true),
+        )) :
+        String[]
     if isempty(files)
         @info "No Ceres reference records in $CERES_DIR; run test/oracle/build.sh and regenerate them."
         @test_skip false

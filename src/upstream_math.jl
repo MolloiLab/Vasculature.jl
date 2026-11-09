@@ -12,7 +12,8 @@
 # Levenberg–Marquardt evaluation then sees an invalid step and rejects it, as Ceres does.
 @inline cpow(x::Float64, y::Float64) = ccall(:pow, Float64, (Float64, Float64), x, y)
 @inline upow(x::Float64, y::Float64) = cpow(x, y)
-@inline upow(x::Float32, y::Float32) = (x > 0.0f0 && isfinite(x)) ? @fastmath(exp(y * log(x))) :
+@inline upow(x::Float32, y::Float32) = (x > 0.0f0 && isfinite(x)) ?
+    @fastmath(exp(y * log(x))) :
     (x < 0.0f0 && !isinteger(y)) ? NaN32 : x^y
 
 # Points are plain 3-tuples. DGtal's PointVector does every operation componentwise; its
@@ -25,8 +26,11 @@ const P3{T} = NTuple{3, T}
 @inline sub3(a::P3, b::P3) = (a[1] - b[1], a[2] - b[2], a[3] - b[3])
 @inline mul3(a::P3, s) = (a[1] * s, a[2] * s, a[3] * s)
 @inline div3(a::P3, s) = (a[1] / s, a[2] / s, a[3] / s)
-@inline dot3(a::P3{T}, b::P3{T}) where {T} = ((zero(T) + a[1] * b[1]) + a[2] * b[2]) + a[3] * b[3]
-@inline norm3(a::P3{T}) where {T} = sqrt(((zero(T) + a[1] * a[1]) + a[2] * a[2]) + a[3] * a[3])
+@inline dot3(a::P3{T}, b::P3{T}) where {T} = ((zero(T) + a[1] * b[1]) + a[2] * b[2]) +
+    a[3] * b[3]
+@inline norm3(a::P3{T}) where {T} = sqrt(
+    ((zero(T) + a[1] * a[1]) + a[2] * a[2]) + a[3] * a[3],
+)
 @inline norm3(x::T, y::T, z::T) where {T} = norm3((x, y, z))
 
 # static_cast<int>(double): truncation toward zero (aarch64 fcvtzs semantics for NaN/overflow).

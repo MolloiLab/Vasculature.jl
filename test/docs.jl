@@ -13,9 +13,21 @@ function _documented_names()
     for (m, prefix) in _APIMap.API_MODULES
         M = m == "Vasculature" ? top : getfield(top, Symbol(m))
         ns = prefix == "XCAT." ?
-            [b.var for b in keys(Base.Docs.meta(M)) if b.mod === M && !startswith(string(b.var), "_") && isdefined(M, b.var)] :
+            [
+                b.var
+                for b in keys(Base.Docs.meta(M))
+                if b.mod === M && !startswith(string(b.var), "_") && isdefined(M, b.var)
+            ] :
             filter(n -> n !== nameof(M), names(M))
-        M === top || filter!(n -> !(n in names(top) && isdefined(top, n) && getfield(top, n) === getfield(M, n)), ns)
+        M === top ||
+            filter!(
+                n -> !(
+                    n in names(top) &&
+                        isdefined(top, n) &&
+                        getfield(top, n) === getfield(M, n)
+                ),
+                ns,
+            )
         append!(out, [(M, n) for n in unique(ns)])
     end
     return out
@@ -33,7 +45,8 @@ end
         end
         md = meta[b]
         path, _ = _APIMap.api_doc_location(md.docs[first(md.order)].data)
-        _APIMap.api_section(string(n), path) == "other" && push!(unplaced, "$(nameof(M)).$n ($(something(path, "?")))")
+        _APIMap.api_section(string(n), path) == "other" &&
+            push!(unplaced, "$(nameof(M)).$n ($(something(path, "?")))")
     end
     @test undocumented == String[]
     @test unplaced == String[]

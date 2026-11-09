@@ -15,10 +15,19 @@ include(joinpath(@__DIR__, "..", "..", "api_sections.jl"))
 # The package is not registered or tagged, so source links point at `main`.
 const _API_GITHUB_SRC = "https://github.com/MolloiLab/Vasculature.jl/blob/main/src"
 
-_api_esc(s) = replace(string(s), '&' => "&amp;", '<' => "&lt;", '>' => "&gt;", '"' => "&quot;")
+_api_esc(s) = replace(
+    string(s),
+    '&' => "&amp;",
+    '<' => "&lt;",
+    '>' => "&gt;",
+    '"' => "&quot;",
+)
 _api_unesc(s) = replace(
     replace(s, r"&#(\d+);" => m -> string(Char(parse(Int, m[3:(end - 1)])))),
-    "&lt;" => "<", "&gt;" => ">", "&quot;" => "\"", "&amp;" => "&",
+    "&lt;" => "<",
+    "&gt;" => ">",
+    "&quot;" => "\"",
+    "&amp;" => "&",
 )
 
 # `[`name`](@ref)` → an in-page link when `name` is on this page, plain code otherwise.
@@ -30,11 +39,15 @@ end
 
 function _api_style_html(html::AbstractString, onpage::Set{String})
     h = replace(
-        html, r"<a href=\"@ref[^\"]*\"><code>(.*?)</code></a>" => function (m)
-            inner = match(r"<code>(.*?)</code>", m).captures[1]
-            tgt = _api_ref_target(inner, onpage)
-            return tgt === nothing ? "<code>$inner</code>" : "<a href=\"#$(_api_esc(tgt))\"><code>$inner</code></a>"
-        end
+        html,
+        r"<a href=\"@ref[^\"]*\"><code>(.*?)</code></a>" =>
+            function (m)
+                inner = match(r"<code>(.*?)</code>", m).captures[1]
+                tgt = _api_ref_target(inner, onpage)
+                return tgt === nothing ?
+                    "<code>$inner</code>" :
+                    "<a href=\"#$(_api_esc(tgt))\"><code>$inner</code></a>"
+            end,
     )
     h = replace(h, r"<a href=\"@ref[^\"]*\">(.*?)</a>" => s"\1")
     h = replace(h, "<pre><code>" => "<pre><code class=\"language-text\">")
@@ -80,7 +93,12 @@ function _api_escape_underscores(text::AbstractString)
         incode = false
         opener = ""
         for (i, part) in enumerate(parts)
-            print(out, incode ? part : replace(part, r"(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])" => "\\_"))
+            print(
+                out,
+                incode ?
+                    part :
+                    replace(part, r"(?<=[\p{L}\p{N}])_(?=[\p{L}\p{N}])" => "\\_"),
+            )
             i <= length(ticks) || break
             t = ticks[i]
             if !incode
@@ -96,8 +114,12 @@ function _api_escape_underscores(text::AbstractString)
     return String(chomp(String(take!(out))))
 end
 
-_api_parse(d) = isempty(d.text) ? d.object : Markdown.parse(_api_escape_underscores(join(string.(d.text))))
-_api_blocks(md) = length(md.content) == 1 && md.content[1] isa Markdown.MD ? _api_blocks(md.content[1]) : md.content
+_api_parse(d) = isempty(d.text) ?
+    d.object :
+    Markdown.parse(_api_escape_underscores(join(string.(d.text))))
+_api_blocks(md) = length(md.content) == 1 && md.content[1] isa Markdown.MD ?
+    _api_blocks(md.content[1]) :
+    md.content
 
 function _api_fallback_signature(M, n, kind)
     kind == "module" && return "module $(nameof(getfield(M, n)))"
@@ -105,7 +127,10 @@ function _api_fallback_signature(M, n, kind)
     kind == "constant" && return "$(n)::$(typeof(getfield(M, n)))"
     if kind == "function"
         ms = [m for m in methods(getfield(M, n)) if parentmodule(m) === M]
-        sigs = unique([replace(sprint(show, m), r"\s+@\s.*$"s => "", r"Vasculature\.(\w+\.)?" => "") for m in ms])
+        sigs = unique([
+            replace(sprint(show, m), r"\s+@\s.*$"s => "", r"Vasculature\.(\w+\.)?" => "")
+            for m in ms
+        ])
         isempty(sigs) || return join(sigs, "\n")
     end
     return string(n)
@@ -115,19 +140,32 @@ end
 function _api_names(M::Module, prefix::AbstractString, top::Module)
     meta = Base.Docs.meta(M)
     if prefix == "XCAT."
-        ns = [b.var for b in keys(meta) if b.mod === M && !startswith(string(b.var), "_") && isdefined(M, b.var)]
+        ns = [
+            b.var
+            for b in keys(meta)
+            if b.mod === M && !startswith(string(b.var), "_") && isdefined(M, b.var)
+        ]
     else
         ns = filter(n -> n !== nameof(M), names(M))
     end
     # a submodule's name that the package also exports at top level is documented once, there
-    M === top || filter!(n -> !(isdefined(top, n) && n in names(top) && getfield(top, n) === getfield(M, n)), ns)
+    M === top ||
+        filter!(
+            n -> !(
+                isdefined(top, n) && n in names(top) && getfield(top, n) === getfield(M, n)
+            ),
+            ns,
+        )
     return sort!(unique(ns); by = n -> lowercase(string(n)))
 end
 
 """Every documented name: its section, kind, and one `(sig, body, path, line)` per docstring."""
 function _api_collect()
     top = Vasculature
-    modules = [(m == "Vasculature" ? top : getfield(top, Symbol(m)), p) for (m, p) in API_MODULES]
+    modules = [
+        (m == "Vasculature" ? top : getfield(top, Symbol(m)), p)
+        for (m, p) in API_MODULES
+    ]
     listed = [(M, p, n) for (M, p) in modules for n in _api_names(M, p, top)]
     onpage = Set(string(p, n) for (_, p, n) in listed)
     entries = []
@@ -142,22 +180,38 @@ function _api_collect()
                 d = md.docs[sig]
                 blocks = copy(_api_blocks(_api_parse(d)))
                 signature = nothing
-                if !isempty(blocks) && blocks[1] isa Markdown.Code && blocks[1].language in ("", "julia") &&
+                if !isempty(blocks) &&
+                        blocks[1] isa Markdown.Code &&
+                        blocks[1].language in ("", "julia") &&
                         occursin(replace(string(n), "!" => ""), blocks[1].code)
                     signature = blocks[1].code
                     popfirst!(blocks)
                 end
                 path, line = api_doc_location(d.data)
-                push!(docs, (sig = signature, body = _api_md_html(Markdown.MD(blocks), onpage), path = path, line = line))
+                push!(
+                    docs,
+                    (
+                        sig = signature,
+                        body = _api_md_html(Markdown.MD(blocks), onpage),
+                        path = path,
+                        line = line,
+                    ),
+                )
             end
         end
         path = isempty(docs) ? nothing : docs[1].path
         name = string(prefix, n)
         push!(
-            entries, (
-                name = name, kind = kind, section = api_section(string(n), path), docs = docs, path = path,
-                line = isempty(docs) ? 0 : docs[1].line, fallback = _api_fallback_signature(M, n, kind),
-            )
+            entries,
+            (
+                name = name,
+                kind = kind,
+                section = api_section(string(n), path),
+                docs = docs,
+                path = path,
+                line = isempty(docs) ? 0 : docs[1].line,
+                fallback = _api_fallback_signature(M, n, kind),
+            ),
         )
     end
     return entries, onpage
@@ -172,19 +226,38 @@ function _api_source_link(path, line)
     return """<a href="$(_api_esc(_api_srcurl(path, line)))" target="_blank" rel="noopener" title="src/$(_api_esc(path))$(line > 0 ? ":$line" : "") on GitHub" class="tv-api-src">source ↗</a>"""
 end
 
-_api_sig_html(code) = """<pre class="tv-api-sig"><code class="language-julia">$(_api_esc(code))</code></pre>"""
+_api_sig_html(
+    code,
+) = """<pre class="tv-api-sig"><code class="language-julia">$(_api_esc(code))</code></pre>"""
 
 function _api_entry_html(e)
     io = IOBuffer()
     id = _api_esc(e.name)
-    print(io, """<article id="$id" data-api-entry="$(_api_esc(lowercase(e.name)))" class="tv-api-entry">""")
-    print(io, """<header class="tv-api-head"><a href="#$id" class="tv-api-name">$id</a><span class="tv-api-kind">$(_api_esc(e.kind))</span><span class="flex-1"></span>""")
+    print(
+        io,
+        """<article id="$id" data-api-entry="$(_api_esc(lowercase(e.name)))" class="tv-api-entry">""",
+    )
+    print(
+        io,
+        """<header class="tv-api-head"><a href="#$id" class="tv-api-name">$id</a><span class="tv-api-kind">$(_api_esc(e.kind))</span><span class="flex-1"></span>""",
+    )
     length(e.docs) == 1 && print(io, _api_source_link(e.path, e.line))
     print(io, "</header>")
-    isempty(e.docs) && print(io, _api_sig_html(e.fallback), """<p class="tv-api-missing">No docstring yet.</p>""")
+    isempty(e.docs) &&
+        print(
+            io,
+            _api_sig_html(e.fallback),
+            """<p class="tv-api-missing">No docstring yet.</p>""",
+        )
     for (i, d) in enumerate(e.docs)
         i > 1 && print(io, """<hr class="tv-api-rule">""")
-        length(e.docs) > 1 && print(io, """<div class="flex justify-end">""", _api_source_link(d.path, d.line), "</div>")
+        length(e.docs) > 1 &&
+            print(
+                io,
+                """<div class="flex justify-end">""",
+                _api_source_link(d.path, d.line),
+                "</div>",
+            )
         print(io, _api_sig_html(something(d.sig, e.fallback)))
         print(io, """<div class="tv-api-doc">""", d.body, "</div>")
     end
@@ -194,18 +267,29 @@ end
 
 function _api_section_html(sec, entries, onpage)
     io = IOBuffer()
-    print(io, """<div class="space-y-4"><div class="tv-api-doc tv-api-intro">""", _api_md_html(Markdown.parse(sec.intro), onpage), "</div>")
+    print(
+        io,
+        """<div class="space-y-4"><div class="tv-api-doc tv-api-intro">""",
+        _api_md_html(Markdown.parse(sec.intro), onpage),
+        "</div>",
+    )
     if !isempty(entries)
         print(io, """<div class="flex flex-wrap gap-1.5 pt-1">""")
         for e in entries
-            print(io, """<a href="#$(_api_esc(e.name))" data-api-chip="$(_api_esc(lowercase(e.name)))" class="tv-api-chip">$(_api_esc(e.name))</a>""")
+            print(
+                io,
+                """<a href="#$(_api_esc(e.name))" data-api-chip="$(_api_esc(lowercase(e.name)))" class="tv-api-chip">$(_api_esc(e.name))</a>""",
+            )
         end
         print(io, "</div>")
         lastpath = missing
         for e in entries
             if !isequal(e.path, lastpath)
                 lastpath = e.path
-                print(io, """<p data-api-file class="tv-api-file">$(_api_esc(e.path === nothing ? "undocumented" : "src/" * e.path))</p>""")
+                print(
+                    io,
+                    """<p data-api-file class="tv-api-file">$(_api_esc(e.path === nothing ? "undocumented" : "src/" * e.path))</p>""",
+                )
             end
             print(io, _api_entry_html(e))
         end
@@ -242,11 +326,16 @@ let BASE = get(ENV, "VASCULATURE_BASE", "")
         for v in values(by_section)
             sort!(v; by = e -> (lead_rank(e.name), something(e.path, "~"), e.line, e.name))
         end
-        shown = [s for s in API_SECTIONS if s.id == "overview" || !isempty(get(by_section, s.id, []))]
+        shown = [
+            s
+            for s in API_SECTIONS
+            if s.id == "overview" || !isempty(get(by_section, s.id, []))
+        ]
         toc = [(s.id, s.title) for s in shown]
 
         PageWithTOC(
-            toc, Div(
+            toc,
+            Div(
                 :class => "max-w-3xl space-y-10",
                 Div(
                     :class => "space-y-4",
@@ -255,10 +344,14 @@ let BASE = get(ENV, "VASCULATURE_BASE", "")
                         :class => "tv-body text-[17px]",
                         "Every public name of Vasculature.jl, generated from its docstrings when the site is built. ",
                         "Four stages, each one function and one spec struct, and the tools around them. The ",
-                        A(:href => "$(BASE)/getting-started/", :class => "tv-link", "Getting Started"),
+                        A(
+                            :href => "$(BASE)/getting-started/",
+                            :class => "tv-link",
+                            "Getting Started",
+                        ),
                         " guide and the ",
                         A(:href => "$(BASE)/examples/", :class => "tv-link", "Examples"),
-                        " show them in real pipelines."
+                        " show them in real pipelines.",
                     ),
                 ),
                 # the filter bar is a direct child of the page column, so it stays pinned under the header
@@ -267,22 +360,33 @@ let BASE = get(ENV, "VASCULATURE_BASE", "")
                     Div(
                         :class => "flex items-center gap-3",
                         Input(
-                            :id => "api-filter", :type => "search", :class => "tv-search",
-                            :placeholder => "Filter names…  (press / to focus)", :autocomplete => "off", :spellcheck => "false",
+                            :id => "api-filter",
+                            :type => "search",
+                            :class => "tv-search",
+                            :placeholder => "Filter names…  (press / to focus)",
+                            :autocomplete => "off",
+                            :spellcheck => "false",
                             Symbol("aria-label") => "Filter the API reference by name",
                         ),
-                        Span(:id => "api-filter-count", :class => "shrink-0 text-xs font-mono tv-muted", "$(length(entries)) names"),
+                        Span(
+                            :id => "api-filter-count",
+                            :class => "shrink-0 text-xs font-mono tv-muted",
+                            "$(length(entries)) names",
+                        ),
                     ),
                 ),
                 [
                     Section(
-                        :id => s.id, :class => "space-y-4 scroll-mt-24", Symbol("data-api-section") => s.id,
+                        :id => s.id,
+                        :class => "space-y-4 scroll-mt-24",
+                        Symbol("data-api-section") => s.id,
                         H2(:class => "tv-title text-3xl", s.title),
                         RawHtml(_api_section_html(s, get(by_section, s.id, []), onpage)),
-                    ) for s in shown
+                    )
+                    for s in shown
                 ]...,
                 RawHtml(_API_FILTER_JS),
-            )
+            ),
         )
     end
 end

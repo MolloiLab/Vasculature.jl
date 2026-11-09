@@ -20,8 +20,14 @@ function _np_pairwise(a::AbstractVector{Float64}, lo::Int, n::Int)
         r5, r6, r7, r8 = a[lo + 4], a[lo + 5], a[lo + 6], a[lo + 7]
         i = 8
         while i < n - n % 8
-            r1 += a[lo + i]; r2 += a[lo + i + 1]; r3 += a[lo + i + 2]; r4 += a[lo + i + 3]
-            r5 += a[lo + i + 4]; r6 += a[lo + i + 5]; r7 += a[lo + i + 6]; r8 += a[lo + i + 7]
+            r1 += a[lo + i]
+            r2 += a[lo + i + 1]
+            r3 += a[lo + i + 2]
+            r4 += a[lo + i + 3]
+            r5 += a[lo + i + 4]
+            r6 += a[lo + i + 5]
+            r7 += a[lo + i + 6]
+            r8 += a[lo + i + 7]
             i += 8
         end
         r = ((r1 + r2) + (r3 + r4)) + ((r5 + r6) + (r7 + r8))
@@ -112,7 +118,7 @@ end
 function _put_to_chars!(buf::Vector{UInt8}, dg::Vector{UInt8}, x::Float64)
     signbit(x) && push!(buf, UInt8('-'))
     iszero(x) && return push!(buf, UInt8('0'))
-    s = codeunits(string(abs(x)))      # Julia's shortest round-trip spelling
+    s = codeunits(string(abs(x))) # Julia's shortest round-trip spelling
     empty!(dg)
     ndot = -1
     e = 0
@@ -136,7 +142,7 @@ function _put_to_chars!(buf::Vector{UInt8}, dg::Vector{UInt8}, x::Float64)
     ndot < 0 && (ndot = length(dg))
     lead = findfirst(!=(UInt8('0')), dg)
     last = findlast(!=(UInt8('0')), dg)
-    xe = ndot - 1 + e - (lead - 1)     # decimal exponent of the first significant digit
+    xe = ndot - 1 + e - (lead - 1) # decimal exponent of the first significant digit
     nd = last - lead + 1
     sci = nd + (nd > 1) + 2 + max(2, ndigits(abs(xe)))
     fixed = xe >= nd - 1 ? xe + 1 : xe >= 0 ? nd + 1 : nd + 1 - xe

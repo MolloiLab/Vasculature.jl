@@ -14,7 +14,7 @@ struct Buckets
     lo::NTuple{3, F32}
     h::F32
     dims::NTuple{3, Int}
-    start::Vector{Int32}   # CSR offsets, length prod(dims) + 1
+    start::Vector{Int32} # CSR offsets, length prod(dims) + 1
     items::Vector{Int32}
 end
 
@@ -37,20 +37,29 @@ function Buckets(pts::Matrix{F32}, h::F32)
     for c in 1:nc
         start[c + 1] += start[c]
     end
-    fill_ = copy(start); items = Vector{Int32}(undef, np)
+    fill_ = copy(start)
+    items = Vector{Int32}(undef, np)
     for i in 1:np
-        items[fill_[cell[i]]] = i; fill_[cell[i]] += 1
+        items[fill_[cell[i]]] = i
+        fill_[cell[i]] += 1
     end
     return Buckets(lo, h, dims, start, items)
 end
 
 @inline function _nearest(B::Buckets, pts, x, y, z)
-    c0 = (floor(Int, (x - B.lo[1]) / B.h), floor(Int, (y - B.lo[2]) / B.h), floor(Int, (z - B.lo[3]) / B.h))
-    best = typemax(F32); bi = Int32(0)
+    c0 = (
+        floor(Int, (x - B.lo[1]) / B.h),
+        floor(Int, (y - B.lo[2]) / B.h),
+        floor(Int, (z - B.lo[3]) / B.h),
+    )
+    best = typemax(F32)
+    bi = Int32(0)
     for ring in 0:maximum(B.dims)
         # every point in a cell at Chebyshev ring ≥ ring is at least (ring − 1)·h away
         ring > 0 && bi != 0 && (F32(ring - 1) * B.h)^2 > best && break
-        for k in (c0[3] - ring):(c0[3] + ring), j in (c0[2] - ring):(c0[2] + ring), i in (c0[1] - ring):(c0[1] + ring)
+        for k in (c0[3] - ring):(c0[3] + ring), j in (c0[2] - ring):(c0[2] + ring), i in (
+                c0[1] - ring
+            ):(c0[1] + ring)
             max(abs(i - c0[1]), abs(j - c0[2]), abs(k - c0[3])) == ring || continue
             (0 <= i < B.dims[1] && 0 <= j < B.dims[2] && 0 <= k < B.dims[3]) || continue
             c = 1 + i + B.dims[1] * (j + B.dims[2] * k)
@@ -58,7 +67,8 @@ end
                 p = B.items[s]
                 d = (pts[1, p] - x)^2 + (pts[2, p] - y)^2 + (pts[3, p] - z)^2
                 if d < best
-                    best = d; bi = p
+                    best = d
+                    bi = p
                 end
             end
         end
@@ -91,34 +101,55 @@ grown to drain the same tissue each get their own partner, where plain nearest-n
 `pts` unused and loads others with several. Ties go to the lower indices, so the result is deterministic.
 """
 function balanced_terminal(pts::Matrix{F32}, q::Matrix{F32}; k::Integer = 8)
-    np = size(pts, 2); nq = size(q, 2)
-    lo = ntuple(d -> minimum(@view pts[d, :]), 3); hi = ntuple(d -> maximum(@view pts[d, :]), 3)
-    h = F32(max(cbrt(prod(max.(hi .- lo, 1.0f0)) * k / np), 0.1f0)) # cells holding about k points of `pts`
+    np = size(pts, 2)
+    nq = size(q, 2)
+    lo = ntuple(d -> minimum(@view pts[d, :]), 3)
+    hi = ntuple(d -> maximum(@view pts[d, :]), 3)
+    h = F32(max(
+        cbrt(prod(max.(hi .- lo, 1.0f0)) * k / np),
+        0.1f0,
+    )) # cells holding about k points of `pts`
     B = Buckets(pts, h)
-    cd = fill(Inf32, k, nq); ck = zeros(Int32, k, nq)        # each point's k nearest, sorted
+    cd = fill(Inf32, k, nq)
+    ck = zeros(Int32, k, nq) # each point's k nearest, sorted
     AK.foreachindex(1:nq; min_elems = 4096) do i
-        x = q[1, i]; y = q[2, i]; z = q[3, i]
-        c0 = (floor(Int, (x - B.lo[1]) / B.h), floor(Int, (y - B.lo[2]) / B.h), floor(Int, (z - B.lo[3]) / B.h))
-        for kc in (c0[3] - 1):(c0[3] + 1), jc in (c0[2] - 1):(c0[2] + 1), ic in (c0[1] - 1):(c0[1] + 1)
+        x = q[1, i]
+        y = q[2, i]
+        z = q[3, i]
+        c0 = (
+            floor(Int, (x - B.lo[1]) / B.h),
+            floor(Int, (y - B.lo[2]) / B.h),
+            floor(Int, (z - B.lo[3]) / B.h),
+        )
+        for kc in (c0[3] - 1):(c0[3] + 1), jc in (c0[2] - 1):(c0[2] + 1), ic in (
+                c0[1] - 1
+            ):(c0[1] + 1)
             (0 <= ic < B.dims[1] && 0 <= jc < B.dims[2] && 0 <= kc < B.dims[3]) || continue
             c = 1 + ic + B.dims[1] * (jc + B.dims[2] * kc)
             for s in B.start[c]:(B.start[c + 1] - 1)
-                j = B.items[s]; d = (pts[1, j] - x)^2 + (pts[2, j] - y)^2 + (pts[3, j] - z)^2
+                j = B.items[s]
+                d = (pts[1, j] - x)^2 + (pts[2, j] - y)^2 + (pts[3, j] - z)^2
                 (d < cd[k, i] || (d == cd[k, i] && j < ck[k, i])) || continue
                 m = k
                 while m > 1 && (cd[m - 1, i] > d || (cd[m - 1, i] == d && ck[m - 1, i] > j))
-                    cd[m, i] = cd[m - 1, i]; ck[m, i] = ck[m - 1, i]; m -= 1
+                    cd[m, i] = cd[m - 1, i]
+                    ck[m, i] = ck[m - 1, i]
+                    m -= 1
                 end
-                cd[m, i] = d; ck[m, i] = j
+                cd[m, i] = d
+                ck[m, i] = j
             end
         end
     end
     cand = [(cd[m, i], Int32(i), ck[m, i]) for i in 1:nq for m in 1:k if ck[m, i] > 0]
     sort!(cand)
-    cap = max(1, nq ÷ np); load = zeros(Int32, np); out = zeros(Int32, nq) # one each when the counts match
+    cap = max(1, nq ÷ np)
+    load = zeros(Int32, np)
+    out = zeros(Int32, nq) # one each when the counts match
     for (_, i, j) in cand
         (out[i] != 0 || load[j] >= cap) && continue
-        out[i] = j; load[j] += 1
+        out[i] = j
+        load[j] += 1
     end
     miss = findall(==(0), out)
     isempty(miss) || (out[miss] = nearest_terminal(pts, q[:, miss]))
@@ -134,21 +165,28 @@ goes to its nearest terminal. `pairs` lists (voxel, terminal, fraction of the vo
 per-voxel quantity is Σ fraction × (terminal value / terminal volume).
 """
 function territory_shares(tpts::Matrix{F32}, q::Matrix{F32}; voxel_ml::Real = 1.0e-3)
-    nt = size(tpts, 2); nv = size(q, 2)
+    nt = size(tpts, 2)
+    nv = size(q, 2)
     lo = ntuple(d -> minimum(@view q[d, :]), 3)
     key(x, y, z) = (round(Int, x - lo[1]), round(Int, y - lo[2]), round(Int, z - lo[3]))
-    vid = Dict{NTuple{3, Int}, Int32}(key(q[1, v], q[2, v], q[3, v]) => Int32(v) for v in 1:nv)
-    tv = zeros(Int32, nt); cnt = zeros(Int32, nv)
+    vid = Dict{NTuple{3, Int}, Int32}(
+        key(q[1, v], q[2, v], q[3, v]) => Int32(v)
+        for v in 1:nv
+    )
+    tv = zeros(Int32, nt)
+    cnt = zeros(Int32, nv)
     for i in 1:nt
         v = get(vid, key(tpts[1, i], tpts[2, i], tpts[3, i]), Int32(0))
-        tv[i] = v; v > 0 && (cnt[v] += 1)
+        tv[i] = v
+        v > 0 && (cnt[v] += 1)
     end
     # terminals that round to a voxel outside the mask join their nearest mask voxel
     miss = findall(==(0), tv)
     if !isempty(miss)
         nv_ = nearest_terminal(q, tpts[:, miss])
         for (k, i) in enumerate(miss)
-            tv[i] = nv_[k]; cnt[nv_[k]] += 1
+            tv[i] = nv_[k]
+            cnt[nv_[k]] += 1
         end
     end
     empty_ = findall(==(0), cnt)
@@ -183,9 +221,17 @@ Each octave's variance scales as σ^(6(1−D)), so the variance of a cube averag
 L^(6(1−D)) with cube side L, as RD ∝ m^(1−D) requires. The amplitude is set so cubes of 1 cm³
 (≈ 1 g) have relative dispersion `rd1g`.
 """
-function demand_field(pos::AbstractMatrix, vol::AbstractVector; rd1g::Real = 0.15, D::Real = 1.2, seed::Integer = 1, octaves = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0))
+function demand_field(
+    pos::AbstractMatrix,
+    vol::AbstractVector;
+    rd1g::Real = 0.15,
+    D::Real = 1.2,
+    seed::Integer = 1,
+    octaves = (0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0),
+)
     n = size(pos, 2)
-    lo = floor.(Int, vec(minimum(pos; dims = 2))) .- 2; hi = ceil.(Int, vec(maximum(pos; dims = 2))) .+ 2
+    lo = floor.(Int, vec(minimum(pos; dims = 2))) .- 2
+    hi = ceil.(Int, vec(maximum(pos; dims = 2))) .+ 2
     dims = Tuple(hi .- lo .+ 1)
     rng = Xoshiro(seed)
     # RD ∝ m^(1−D) means Var(cube average) ∝ L^(6(1−D)) for side L (m ∝ L³); octave components of
@@ -200,21 +246,26 @@ function demand_field(pos::AbstractMatrix, vol::AbstractVector; rd1g::Real = 0.1
     end
     zp = Vector{Float32}(undef, n)
     for k in 1:n
-        I = CartesianIndex(Tuple(clamp.(round.(Int, pos[:, k]) .- lo .+ 1, 1, collect(dims))))
+        I = CartesianIndex(Tuple(
+            clamp.(round.(Int, pos[:, k]) .- lo .+ 1, 1, collect(dims)),
+        ))
         zp[k] = z[I]
     end
     zp .-= sum(zp .* vol) / sum(vol)
     # amplitude: relative dispersion of 1 cm³ cubes equals rd1g
     cube = [Tuple(floor.(Int, pos[:, k] ./ 10)) for k in 1:n]
     function rd(a)
-        m = exp.(a .* zp); m ./= sum(m .* vol) / sum(vol)
+        m = exp.(a .* zp)
+        m ./= sum(m .* vol) / sum(vol)
         acc = Dict{NTuple{3, Int}, Tuple{F32, F32}}()
         for k in 1:n
-            s, w = get(acc, cube[k], (0.0f0, 0.0f0)); acc[cube[k]] = (s + F32(m[k] * vol[k]), w + F32(vol[k]))
+            s, w = get(acc, cube[k], (0.0f0, 0.0f0))
+            acc[cube[k]] = (s + F32(m[k] * vol[k]), w + F32(vol[k]))
         end
-        wt = [w for (s, w) in values(acc)]; mv = [s / w for (s, w) in values(acc)]
+        wt = [w for (s, w) in values(acc)]
+        mv = [s / w for (s, w) in values(acc)]
         μ = sum(mv .* wt) / sum(wt)
-        return sqrt(sum(wt .* (mv .- μ) .^ 2) / sum(wt)) / μ, m
+        return sqrt(sum(wt .* (mv .- μ).^2) / sum(wt)) / μ, m
     end
     a0, a1 = 0.0f0, 10.0f0
     for _ in 1:40
@@ -226,12 +277,17 @@ end
 
 # separable Gaussian blur, σ in grid cells
 function _blur!(f::Array{Float32, 3}, σ::Float32)
-    r = max(1, ceil(Int, 3σ)); w = Float32[exp(-(i / σ)^2 / 2) for i in -r:r]; w ./= sum(w)
+    r = max(1, ceil(Int, 3σ))
+    w = Float32[exp(-(i / σ)^2 / 2) for i in -r:r]
+    w ./= sum(w)
     for d in 1:3
-        g = similar(f); n = size(f, d)
+        g = similar(f)
+        n = size(f, d)
         CI = CartesianIndices(f)
         AK.foreachindex(g; min_elems = 4096) do li
-            I = CI[li]; i = I[d]; s = 0.0f0
+            I = CI[li]
+            i = I[d]
+            s = 0.0f0
             for o in -r:r
                 ii = clamp(i + o, 1, n)
                 J = Base.setindex(Tuple(I), ii, d)

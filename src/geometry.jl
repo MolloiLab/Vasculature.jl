@@ -11,7 +11,8 @@
     vABn = div3(vAB, norm3(vAB))
     d = dot3(sub3(C, A), vABn)
     proj = add3(A, mul3(vABn, d))
-    res = (A[1] < B[1] && proj[1] <= B[1]) || (A[2] < B[2] && proj[2] <= B[2]) ||
+    res = (A[1] < B[1] && proj[1] <= B[1]) ||
+        (A[2] < B[2] && proj[2] <= B[2]) ||
         (A[3] < B[3] && proj[3] <= B[3])
     return proj, d >= zero(T) && res
 end
@@ -26,10 +27,13 @@ end
 # CoronaryGeometry::segment2segmentDistance
 @inline function seg2seg_distance(sA::P3{T}, sB::P3{T}, sC::P3{T}, sD::P3{T}) where {T}
     A, B, C, D = sA, sB, sC, sD
-    if B[1] - A[1] == 0 && B[2] - A[2] == 0 && B[3] - A[3] == 0   # sameAB: swap AB <-> CD
+    if B[1] - A[1] == 0 && B[2] - A[2] == 0 && B[3] - A[3] == 0
+        # sameAB: swap AB <-> CD
         A, B, C, D = sC, sD, sA, sB
     end
-    d1 = sub3(B, A); d2 = sub3(D, C); d12 = sub3(C, A)
+    d1 = sub3(B, A)
+    d2 = sub3(D, C)
+    d12 = sub3(C, A)
     z = zero(T)
     D1 = ((z + d1[1] * d1[1]) + d1[2] * d1[2]) + d1[3] * d1[3]
     D2 = ((z + d2[1] * d2[1]) + d2[2] * d2[2]) + d2[3] * d2[3]
@@ -39,7 +43,8 @@ end
     sAB = d1[1] == 0 && d1[2] == 0 && d1[3] == 0
     sCD = d2[1] == 0 && d2[2] == 0 && d2[3] == 0
     den = D1 * D2 - R * R
-    u = z; t = z
+    u = z
+    t = z
     step = if !sAB && sCD
         4
     elseif sAB && sCD
@@ -76,7 +81,14 @@ end
 end
 
 # CoronaryGeometry::isIntersecting: thick segments AB (radius rAB) and CD (radius rCD).
-@inline function is_intersecting(A::P3{T}, B::P3{T}, rAB::T, C::P3{T}, D::P3{T}, rCD::T) where {T}
+@inline function is_intersecting(
+    A::P3{T},
+    B::P3{T},
+    rAB::T,
+    C::P3{T},
+    D::P3{T},
+    rCD::T,
+) where {T}
     two = T(2)
     cAB = div3(add3(A, B), two)
     cCD = div3(add3(C, D), two)

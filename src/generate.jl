@@ -61,56 +61,110 @@ terminals and statistically equivalent to it, not bitwise identical (see `docs/d
 bit-for-bit C++ replica, is always sequential.
 """
 function generate(
-        domain_vol, base_xml; nterm::Integer,
-        aperf::Real, min_dist::Real = 5.0, root = nothing, gamma::Real = 3.0,
-        root_radius_max = 1.588, seed::Integer = 0, T::Type = Float32,
-        parallel::Bool = true, progress::Integer = 0, export_xml = nothing,
-        trace = nothing, volume::Symbol = :upstream, metric::Symbol = :upstream,
-        mode::Symbol = :fast, sampling::Symbol = :voxel, fix_base::Bool = false,
-        collision::Symbol = :current, max_branch_angle = nothing,
-        growth::Symbol = mode === :exact ? :sequential : :batched, n_seq::Integer = 2_000, batch_frac::Real = 0.01, batch_max::Integer = 16_384, device = identity,
-        territories = nothing, base_groups = nothing, forbidden = nothing, root_fixed::Bool = false, root_shares = nothing,
-        kwargs...
-    )
+    domain_vol,
+    base_xml;
+    nterm::Integer,
+    aperf::Real,
+    min_dist::Real = 5.0,
+    root = nothing,
+    gamma::Real = 3.0,
+    root_radius_max = 1.588,
+    seed::Integer = 0,
+    T::Type = Float32,
+    parallel::Bool = true,
+    progress::Integer = 0,
+    export_xml = nothing,
+    trace = nothing,
+    volume::Symbol = :upstream,
+    metric::Symbol = :upstream,
+    mode::Symbol = :fast,
+    sampling::Symbol = :voxel,
+    fix_base::Bool = false,
+    collision::Symbol = :current,
+    max_branch_angle = nothing,
+    growth::Symbol = mode === :exact ? :sequential : :batched,
+    n_seq::Integer = 2_000,
+    batch_frac::Real = 0.01,
+    batch_max::Integer = 16_384,
+    device = identity,
+    territories = nothing,
+    base_groups = nothing,
+    forbidden = nothing,
+    root_fixed::Bool = false,
+    root_shares = nothing,
+    kwargs...,
+)
     p = CCOParams(;
-        nterm = Int(nterm), aperf = Float64(aperf), gamma = Float64(gamma),
+        nterm = Int(nterm),
+        aperf = Float64(aperf),
+        gamma = Float64(gamma),
         root_radius_max = Float64(first(root_radius_max)),
-        min_distance_to_border = Float64(min_dist), kwargs...
+        min_distance_to_border = Float64(min_dist),
+        kwargs...,
     )
     dom = MaskDomain{T}(
-        domain_vol; root = root === nothing ? nothing : Tuple(Int32.(root)),
-        min_dist = min_dist, metric = metric
+        domain_vol;
+        root = root === nothing ? nothing : Tuple(Int32.(root)),
+        min_dist = min_dist,
+        metric = metric,
     )
     territories === nothing || set_territories!(dom, territories)
-    forbidden === nothing || set_forbidden!(dom, forbidden...)       # (mask, origin mm, cell mm)
+    forbidden === nothing || set_forbidden!(dom, forbidden...) # (mask, origin mm, cell mm)
     m = import_gxl(T, base_xml, p)
     E = Engine(
-        m, dom; seed = seed, mode = mode, volume = volume, sampling = sampling, fix_base = fix_base,
-        collision = collision, max_branch_angle = max_branch_angle, root_caps = root_radius_max, root_shares = root_shares
-    )  # mode = :exact is test-only
+        m,
+        dom;
+        seed = seed,
+        mode = mode,
+        volume = volume,
+        sampling = sampling,
+        fix_base = fix_base,
+        collision = collision,
+        max_branch_angle = max_branch_angle,
+        root_caps = root_radius_max,
+        root_shares = root_shares,
+    ) # mode = :exact is test-only
     if base_groups !== nothing
-        root_shares === nothing || throw(ArgumentError("root_shares count each tree by its id, which base_groups replace"))
+        root_shares === nothing ||
+            throw(ArgumentError(
+                "root_shares count each tree by its id, which base_groups replace",
+            ))
         # territory group of each imaged segment, from its midpoint; grown segments inherit it
         for j in 2:nsegments(m)
-            a = m.pos[m.parent[j] == 1 ? j : m.parent[j]]; b = m.pos[j]
-            E.treeid[j] = UInt8(base_groups(((a[1] + b[1]) / 2, (a[2] + b[2]) / 2, (a[3] + b[3]) / 2)))
+            a = m.pos[m.parent[j] == 1 ? j : m.parent[j]]
+            b = m.pos[j]
+            E.treeid[j] = UInt8(base_groups((
+                (a[1] + b[1]) / 2,
+                (a[2] + b[2]) / 2,
+                (a[3] + b[3]) / 2,
+            )))
         end
     end
     grow!(
-        E; parallel = parallel, progress = Int(progress), trace = trace, growth = growth,
-        n_seq = n_seq, batch_frac = batch_frac, batch_max = batch_max, device = device
+        E;
+        parallel = parallel,
+        progress = Int(progress),
+        trace = trace,
+        growth = growth,
+        n_seq = n_seq,
+        batch_frac = batch_frac,
+        batch_max = batch_max,
+        device = device,
     )
     if root_fixed
         # one shared scale for the whole forest (all trees at the same pressure), set by the tree
         # whose cap binds; collision = :final already tested at (or above) this scale during growth
-        mode === :fast && fast_refresh_radii!(E)              # current radii also after sequential growth
-        R = eltype(m.radius); s = typemax(R)
+        mode === :fast &&
+            fast_refresh_radii!(E) # current radii also after sequential growth
+        R = eltype(m.radius)
+        s = typemax(R)
         for (k, c) in enumerate(E.roots)
             E.rcaps[k] > 0 && (s = min(s, R(E.rcaps[k]) / m.radius[c]))
         end
         if isfinite(s)
             m.radius .*= s
-            update_rmax!(E); grid_refresh_radii!(E.g, m)     # spatial bounds follow the new radii
+            update_rmax!(E)
+            grid_refresh_radii!(E.g, m) # spatial bounds follow the new radii
         end
     end
     export_xml === nothing || export_gxl(E.m, export_xml)

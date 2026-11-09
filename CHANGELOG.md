@@ -4,6 +4,12 @@ All notable changes to Vasculature.jl. Each release section links its diff; see 
 
 ## [Unreleased]
 
+### Changed
+- Formatting and lint by [Fatou](https://fatou.dev) with its defaults, replacing Runic: `fatou format .` for the code,
+  `docs/fatou_notebooks.sh` for the Pluto notebooks; the `Fatou` CI workflow checks both.
+- The docs' notebook export fingerprint no longer covers `src/` or `Project.toml`, so a code change, compat bump or
+  release no longer stales the rendered notebook pages; re-render the notebooks a change affects by hand.
+
 ## [0.1.0](https://github.com/MolloiLab/Vasculature.jl/releases/tag/v0.1.0) (2026-11-09)
 
 First registered release.

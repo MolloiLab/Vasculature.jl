@@ -2,10 +2,10 @@
 # Steady lumped-parameter (Poiseuille) hemodynamics: compute_hemodynamics and
 # _read_domain_mass_g of coronary_postprocess.py (HCT-CCO commit 9bc141f). CGS units inside.
 
-const MU_VISC_CGS = 0.036   # blood viscosity 3.6 cP in dyn.s/cm^2
-const PERF_REST = 1.0       # resting coronary perfusion, mL/min/g
-const PERF_STRESS = 3.5     # stress (vasodilated) coronary perfusion, mL/min/g
-const TISSUE_DENS = 1.05    # g/cm^3
+const MU_VISC_CGS = 0.036 # blood viscosity 3.6 cP in dyn.s/cm^2
+const PERF_REST = 1.0     # resting coronary perfusion, mL/min/g
+const PERF_STRESS = 3.5   # stress (vasodilated) coronary perfusion, mL/min/g
+const TISSUE_DENS = 1.05  # g/cm^3
 const _MMHG = 1333.22
 
 """
@@ -122,7 +122,12 @@ end
 The lumped resistive-network solve of compute_hemodynamics at resting and stress perfusion,
 with per-order medians (orders in increasing order) as written to `<prefix>_hemodynamics.csv`.
 """
-function hemodynamics(t::PPTree, orders::Vector{Int}, vol_path::AbstractString; mass::Symbol = :mask)
+function hemodynamics(
+    t::PPTree,
+    orders::Vector{Int},
+    vol_path::AbstractString;
+    mass::Symbol = :mask,
+)
     mass_g, v_cm3 = domain_mass_g(vol_path; mass)
     net = _hemo_network(t)
     resting = _hemo_solve(net, t.radius, PERF_REST * mass_g / 60.0)
@@ -131,9 +136,15 @@ function hemodynamics(t::PPTree, orders::Vector{Int}, vol_path::AbstractString; 
     ords = sort(unique(filter(>(0), orders)))
     med(x, o) = _np_median(x[orders .== o])
     return (
-        mass_g = mass_g, volume_cm3 = v_cm3, inlet_pressure = 100.0, resting = resting,
-        stress = stress, order = ords, median_diameter = [med(diam, o) for o in ords],
-        wss_resting = [med(resting.wss, o) for o in ords], wss_stress = [med(stress.wss, o) for o in ords],
+        mass_g = mass_g,
+        volume_cm3 = v_cm3,
+        inlet_pressure = 100.0,
+        resting = resting,
+        stress = stress,
+        order = ords,
+        median_diameter = [med(diam, o) for o in ords],
+        wss_resting = [med(resting.wss, o) for o in ords],
+        wss_stress = [med(stress.wss, o) for o in ords],
         pressure_resting = [med(resting.pressure, o) for o in ords],
         pressure_stress = [med(stress.pressure, o) for o in ords],
         flow_stress = [med(stress.flow, o) * 60.0 for o in ords],
@@ -148,18 +159,29 @@ function write_hemodynamics_csv(path, h)
         _csvrow(io, ["inlet_pressure_mmHg", _pyfmt(h.inlet_pressure, 0)])
         _csvrow(io, String[])
         _csvrow(
-            io, [
-                "order", "median_diameter_mm", "WSS_resting_dyn/cm2", "WSS_stress_dyn/cm2",
-                "pressure_resting_mmHg", "pressure_stress_mmHg", "flow_stress_mL/min",
-            ]
+            io,
+            [
+                "order",
+                "median_diameter_mm",
+                "WSS_resting_dyn/cm2",
+                "WSS_stress_dyn/cm2",
+                "pressure_resting_mmHg",
+                "pressure_stress_mmHg",
+                "flow_stress_mL/min",
+            ],
         )
         for k in eachindex(h.order)
             _csvrow(
-                io, [
-                    h.order[k], _pyfmt(h.median_diameter[k], 3), _pyfmt(h.wss_resting[k], 1),
-                    _pyfmt(h.wss_stress[k], 1), _pyfmt(h.pressure_resting[k], 1),
-                    _pyfmt(h.pressure_stress[k], 1), _pyfmt(h.flow_stress[k], 4),
-                ]
+                io,
+                [
+                    h.order[k],
+                    _pyfmt(h.median_diameter[k], 3),
+                    _pyfmt(h.wss_resting[k], 1),
+                    _pyfmt(h.wss_stress[k], 1),
+                    _pyfmt(h.pressure_resting[k], 1),
+                    _pyfmt(h.pressure_stress[k], 1),
+                    _pyfmt(h.flow_stress[k], 4),
+                ],
             )
         end
     end

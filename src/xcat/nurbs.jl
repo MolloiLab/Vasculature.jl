@@ -17,7 +17,7 @@ struct NurbsSurface
     name::String
     u::Vector{Float64}
     v::Vector{Float64}
-    P::Array{Float64, 3}    # (3, nu, nv)
+    P::Array{Float64, 3} # (3, nu, nv)
 end
 
 nu(s::NurbsSurface) = size(s.P, 2)
@@ -35,27 +35,35 @@ function read_nrb(path::AbstractString)
     i = 1
     num(s) = parse(Float64, strip(s))
     while i <= length(L)
-        name = strip(L[i]); i += 1
+        name = strip(L[i])
+        i += 1
         isempty(name) && continue
-        M = parse(Int, split(L[i])[1]); i += 1
-        N = parse(Int, split(L[i])[1]); i += 1
-        startswith(L[i], "U Knot") || error("read_nrb: expected U knots for $name at line $i")
+        M = parse(Int, split(L[i])[1])
+        i += 1
+        N = parse(Int, split(L[i])[1])
+        i += 1
+        startswith(L[i], "U Knot") ||
+            error("read_nrb: expected U knots for $name at line $i")
         i += 1
         u = Float64[]
         while !startswith(L[i], "V Knot")
-            push!(u, num(L[i])); i += 1
+            push!(u, num(L[i]))
+            i += 1
         end
         i += 1
         v = Float64[]
         while !startswith(L[i], "Control")
-            push!(v, num(L[i])); i += 1
+            push!(v, num(L[i]))
+            i += 1
         end
         i += 1
-        length(u) == N + 4 && length(v) == M + 4 || error("read_nrb: $name has $(length(u))/$(length(v)) knots for $M×$N points")
+        length(u) == N + 4 && length(v) == M + 4 ||
+            error("read_nrb: $name has $(length(u))/$(length(v)) knots for $M×$N points")
         P = Array{Float64, 3}(undef, 3, N, M)
         for k in 1:(M * N)
             f = split(L[i], (',', ' ', '\t'); keepempty = false)
-            jj = mod1(k, N); ii = cld(k, N)
+            jj = mod1(k, N)
+            ii = cld(k, N)
             for d in 1:3
                 P[d, jj, ii] = parse(Float64, f[d])
             end
@@ -73,12 +81,18 @@ Writes surfaces in XCAT `.nrb` format, in the given order (a vector of `NurbsSur
 Dict, written sorted by name).
 """
 function write_nrb(path::AbstractString, surfaces)
-    S = surfaces isa AbstractDict ? [surfaces[k] for k in sort(collect(keys(surfaces)))] : collect(surfaces)
+    S = surfaces isa AbstractDict ?
+        [surfaces[k] for k in sort(collect(keys(surfaces)))] :
+        collect(surfaces)
     open(path, "w") do io
         for s in S
-            println(io, s.name); println(io, nv(s), " :M"); println(io, nu(s), " :N")
-            println(io, "U Knot Vector"); foreach(x -> println(io, _g(x)), s.u)
-            println(io, "V Knot Vector"); foreach(x -> println(io, _g(x)), s.v)
+            println(io, s.name)
+            println(io, nv(s), " :M")
+            println(io, nu(s), " :N")
+            println(io, "U Knot Vector")
+            foreach(x -> println(io, _g(x)), s.u)
+            println(io, "V Knot Vector")
+            foreach(x -> println(io, _g(x)), s.v)
             println(io, "Control Points")
             for i in 1:nv(s), j in 1:nu(s)
                 println(io, _g(s.P[1, j, i]), ",", _g(s.P[2, j, i]), ",", _g(s.P[3, j, i]))
@@ -103,7 +117,9 @@ end
 
 function _basis(knots::Vector{Float64}, s::Int, t::Float64)
     # Cox–de Boor, degree 3 (Piegl & Tiller, The NURBS Book, A2.2); nonzero functions s-3..s
-    N = zeros(4); left = zeros(4); right = zeros(4)
+    N = zeros(4)
+    left = zeros(4)
+    right = zeros(4)
     N[1] = 1.0
     for j in 1:3
         left[j + 1] = t - knots[s + 1 - j]
@@ -126,14 +142,21 @@ end
 Point on the surface at parameters (`t_u`, `t_v`), each within its knot range.
 """
 function evaluate(s::NurbsSurface, tu::Real, tv::Real)
-    iu = _span(s.u, nu(s), Float64(tu)); iv = _span(s.v, nv(s), Float64(tv))
-    Bu = _basis(s.u, iu, Float64(tu)); Bv = _basis(s.v, iv, Float64(tv))
-    x = 0.0; y = 0.0; z = 0.0
+    iu = _span(s.u, nu(s), Float64(tu))
+    iv = _span(s.v, nv(s), Float64(tv))
+    Bu = _basis(s.u, iu, Float64(tu))
+    Bv = _basis(s.v, iv, Float64(tv))
+    x = 0.0
+    y = 0.0
+    z = 0.0
     for a in 1:4, b in 1:4
         w = Bu[a] * Bv[b]
         w == 0 && continue
-        j = iu - 4 + a; i = iv - 4 + b
-        x += w * s.P[1, j, i]; y += w * s.P[2, j, i]; z += w * s.P[3, j, i]
+        j = iu - 4 + a
+        i = iv - 4 + b
+        x += w * s.P[1, j, i]
+        y += w * s.P[2, j, i]
+        z += w * s.P[3, j, i]
     end
     return (x, y, z)
 end
@@ -145,18 +168,29 @@ Samples the surface on a regular parameter grid and triangulates it. Degenerate 
 (collapsed caps) are dropped.
 """
 function tessellate(s::NurbsSurface; nu::Int = 64, nv::Int = 64)
-    tu = range(s.u[4], s.u[end - 3], length = nu); tv = range(s.v[4], s.v[end - 3], length = nv)
+    tu = range(s.u[4], s.u[end - 3], length = nu)
+    tv = range(s.v[4], s.v[end - 3], length = nv)
     X = Matrix{Float64}(undef, 3, nu * nv)
     for (a, x) in enumerate(tu), (b, y) in enumerate(tv)
         p = evaluate(s, x, y)
         k = b + nv * (a - 1)
-        X[1, k] = p[1]; X[2, k] = p[2]; X[3, k] = p[3]
+        X[1, k] = p[1]
+        X[2, k] = p[2]
+        X[3, k] = p[3]
     end
     T = Int[]
     id(a, b) = b + nv * (a - 1)
     area2(i, j, k) = (
-        e1 = X[:, j] .- X[:, i]; e2 = X[:, k] .- X[:, i];
-        sum(abs2, (e1[2] * e2[3] - e1[3] * e2[2], e1[3] * e2[1] - e1[1] * e2[3], e1[1] * e2[2] - e1[2] * e2[1]))
+        e1 = X[:, j] .- X[:, i];
+        e2 = X[:, k] .- X[:, i];
+        sum(
+            abs2,
+            (
+                e1[2] * e2[3] - e1[3] * e2[2],
+                e1[3] * e2[1] - e1[1] * e2[3],
+                e1[1] * e2[2] - e1[2] * e2[1],
+            ),
+        )
     )
     for a in 1:(nu - 1), b in 1:(nv - 1)
         p, q, r, t = id(a, b), id(a + 1, b), id(a + 1, b + 1), id(a, b + 1)

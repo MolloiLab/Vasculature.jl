@@ -27,7 +27,11 @@ function read_vol(path::AbstractString)
     sx, sy, sz = (parse(Int, header[k]) for k in ("X", "Y", "Z"))
     version = parse(Int, header["Version"])
     if haskey(header, "Center-X")
-        c = (parse(Int, header["Center-X"]), parse(Int, header["Center-Y"]), parse(Int, header["Center-Z"]))
+        c = (
+            parse(Int, header["Center-X"]),
+            parse(Int, header["Center-Y"]),
+            parse(Int, header["Center-Z"]),
+        )
         lower = Int32.((c[1] - (sx - 1) ÷ 2, c[2] - (sy - 1) ÷ 2, c[3] - (sz - 1) ÷ 2))
     else
         lower = (Int32(0), Int32(0), Int32(0))
@@ -38,8 +42,13 @@ function read_vol(path::AbstractString)
     if version == 3
         destlen = Ref{Culong}(total)
         rc = ccall(
-            (:uncompress, Zlib_jll.libz), Cint, (Ptr{UInt8}, Ref{Culong}, Ptr{UInt8}, Culong),
-            img, destlen, payload, length(payload)
+            (:uncompress, Zlib_jll.libz),
+            Cint,
+            (Ptr{UInt8}, Ref{Culong}, Ptr{UInt8}, Culong),
+            img,
+            destlen,
+            payload,
+            length(payload),
         )
         # Z_BUF_ERROR (-5) only means trailing data; DGtal reads exactly `total` voxels.
         (rc == 0 || rc == -5) && destlen[] == total || error("read_vol: zlib error $rc")
@@ -57,11 +66,22 @@ end
 
 Write a Bool mask as a DGtal `.vol` (Version 2, 1 mm voxels): voxel `mask[i, j, k]` is the point `lower .+ (i, j, k) .- 1`.
 """
-function write_vol(path::AbstractString, mask::AbstractArray{Bool, 3}, lower::NTuple{3, <:Integer})
-    s = size(mask); c = lower .+ (s .- 1) .÷ 2
+function write_vol(
+    path::AbstractString,
+    mask::AbstractArray{Bool, 3},
+    lower::NTuple{3, <:Integer},
+)
+    s = size(mask)
+    c = lower .+ (s .- 1) .÷ 2
     open(path, "w") do io
-        print(io, "Center-X: $(c[1])\nCenter-Y: $(c[2])\nCenter-Z: $(c[3])\nX: $(s[1])\nY: $(s[2])\nZ: $(s[3])\n")
-        print(io, "Voxel-Size: 1\nAlpha-Color: 0\nVoxel-Endian: 0\nInt-Endian: 0123\nVersion: 2\n.\n")
+        print(
+            io,
+            "Center-X: $(c[1])\nCenter-Y: $(c[2])\nCenter-Z: $(c[3])\nX: $(s[1])\nY: $(s[2])\nZ: $(s[3])\n",
+        )
+        print(
+            io,
+            "Voxel-Size: 1\nAlpha-Color: 0\nVoxel-Endian: 0\nInt-Endian: 0123\nVersion: 2\n.\n",
+        )
         write(io, UInt8[m ? 0xff : 0x00 for m in mask])
     end
     return path
