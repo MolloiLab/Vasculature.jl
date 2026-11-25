@@ -100,7 +100,40 @@ Found while building the leg. They are not fixed here.
 
 ## Results so far
 
-The results are on the leg workstation, in its `LIMB_CACHE_DIR` (about 31 GB). They are to be moved to lab storage, at: **(location to be filled in)**.
+In words only. The numbers and figures are made from XCAT, so they stay with the results (see *Licensing*).
+
+### What they show
+
+- **Both trees.** Every arterial and venous patch grew its full number of terminals; none failed or ran out of time. The terminal radii are close to their targets, and virtually no terminal ends inside an imaged artery or vein.
+- **Flow.** Every check in section 7 passes.
+  - The flow at maximal dilation meets its target.
+  - At rest, the flow agrees with the leg's oxygen balance and with measured values, and the oxygen left in the femoral vein is on target.
+  - No bed's flow reverses, and at rest no vessel is at full tone.
+  - At maximal dilation, the flow per gram and the pressure reaching the tissue rise from the foot to the thigh.
+- **Contrast at rest.** Contrast reaches the thigh first and the foot last. The femoral vein's outflow peaks well after the arterial input, and much lower. At the end of the run, 120 s after the injection, every part of the leg holds about the same iodine per mL of tissue, still rising slowly, most of it in the capillary beds. What the leg holds matches what the body sends it, within the body model's own bookkeeping.
+- **A narrowed superficial femoral artery.**
+  - At rest, the flow below the narrowing holds until the narrowing is severe, then falls steeply; the foot loses the most. Once the flow falls, the tissue below runs short of oxygen and its arterioles open fully.
+  - At maximal dilation, the flow below falls from the start and is far lower already at moderate narrowing.
+  - The thigh above the narrowing keeps its flow, and at maximal dilation takes slightly more.
+- **The iodine in the whole body.** The iodine passes the large veins, the heart chambers and the lungs first, then the aorta and the organs. The grown right leg fills slowly, peaks late and keeps nearly all of its iodine to the end. It holds more than the body's lumped left leg, because its exchange with the tissue, its flow and its blood volume are all higher. The liver and gut and the rest of the body are still filling at the end.
+
+### Where the numbers and figures are
+
+In `LIMB_CACHE_DIR`:
+
+| Step | Numbers | Figures |
+|---|---|---|
+| Both trees | `stage2_view*/summary.txt` | `stage2_view/overview.html` |
+| Flow | `flow/summary.txt` | tables in section 7 of the notebook |
+| Contrast at rest | `transport_rest/summary.txt` | `transport_rest/figures/figures.html`, `transport_rest/transport_view.html` |
+| Narrowed artery | `stenosis/summary.txt` | `stenosis/figures/figures.html` |
+| Whole body | `whole_body/summary.txt` | `whole_body/figures/figures.html` |
+
+Section 7 of the notebook also shows the flow, the transport, the narrowing and the whole body, when `LIMB_CACHE_DIR` holds them.
+
+They are on the leg workstation, in its `LIMB_CACHE_DIR` (about 31 GB). They are to be moved to lab storage, at: **(location to be filled in)**.
+
+### How they were made and checked
 
 - **Computed with:** the package at `68c0b75`, as of 2026-10-28.
 - **Checked on:** the current `main` (`c1ea484`) on 2026-11-24. The long steps (pass 2, flow, transport, stenosis) were not run again.
