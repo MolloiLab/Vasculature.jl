@@ -24,7 +24,7 @@ This folder holds code and text only. The scripts read XCAT from the path in `XC
 | Variable | What it is |
 |---|---|
 | `XCAT_LEG_NRB` | XCAT's both-legs NURBS file (licensed, on lab storage) |
-| `LIMB_CACHE_DIR` | where every stage, result and figure is written (lab storage or local scratch, never the repository) |
+| `LIMB_CACHE_DIR` | where every stage, result and figure is written (lab storage or local scratch, never the repository). To start from the saved results: the unzipped `limb_pipeline_cache` (see *Where they are*) |
 | `LIMB_NOTEBOOK` | optional: another copy of the notebook for the scripts to include |
 | `STAGE2_LIMIT_S` | optional: `grow_stage2.jl`'s time limit per patch, in seconds |
 
@@ -85,7 +85,6 @@ A copy does not follow later changes to the package. Compare these copies whenev
 
 ## Not done yet
 
-
 - Compartments, a phantom slab, idealized first-pass perfusion against ground truth, and the CT scan (BasisSimulator.jl).
 
 ## Known issues in the package
@@ -100,7 +99,7 @@ Found while building the leg. They are not fixed here.
 
 ## Results so far
 
-The main numbers of each step are below. The figures and the result files stay on lab storage (see *Licensing*).
+The main numbers of each step are below. The figures and the result files stay on lab storage (see *Licensing* and *Where they are*).
 
 ### Both trees
 
@@ -190,9 +189,13 @@ The narrowing is 20 mm long, in the adductor canal. Its middle is 13 cm above th
 
 The grown right leg holds 1.5 times the left leg's iodine at 120 s (1482 against 998 mg). Its flow is about 10% higher, and its exchange with the tissue and its blood volume are higher too.
 
-### Where the full numbers and the figures are
+### Where they are
 
-In `LIMB_CACHE_DIR`:
+On lab storage, in one zip: `Yishu\limb_results.zip` on the lab's `Molloilab` share (`Z:\Yishu\limb_results.zip` on the leg workstation). It is 21 GB, and 31 GB unzipped.
+
+To use the results, unzip it and set `LIMB_CACHE_DIR` to the `limb_pipeline_cache` folder inside. The notebook and the scripts then skip every step already done, and section 7 of the notebook shows the flow, the transport, the narrowing and the whole body.
+
+That folder holds every cached stage, both trees among them (`patch_<k>.jls` and `vein_patch_<k>.jls`), and each step's numbers and figures:
 
 | Step | Numbers | Figures |
 |---|---|---|
@@ -201,10 +204,6 @@ In `LIMB_CACHE_DIR`:
 | Contrast at rest | `transport_rest/summary.txt` | `transport_rest/figures/figures.html`, `transport_rest/transport_view.html` |
 | Narrowed artery | `stenosis/summary.txt` | `stenosis/figures/figures.html` |
 | Whole body | `whole_body/summary.txt` | `whole_body/figures/figures.html` |
-
-Section 7 of the notebook also shows the flow, the transport, the narrowing and the whole body, when `LIMB_CACHE_DIR` holds them.
-
-They are on the leg workstation, in its `LIMB_CACHE_DIR` (about 31 GB). They are to be moved to lab storage, at: **(location to be filled in)**.
 
 ### How they were made and checked
 
