@@ -110,6 +110,3 @@ The results are on the leg workstation, in its `LIMB_CACHE_DIR` (about 31 GB). T
   - `transport_leg.jl test` gives the same body and patches as before; its differences from the package's own `frame_masses` and `sinus_outflow` moved only in their second digit.
   - The `InputCurve` issue is still there: its tables are still Float32.
 
-## Formatting
-
-The code here is not yet formatted with Fatou. Fatou's CI check covers this folder, so run `fatou format docs/limb` before opening a pull request.
