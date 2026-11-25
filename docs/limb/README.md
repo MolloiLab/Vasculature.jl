@@ -85,7 +85,6 @@ A copy does not follow later changes to the package. Compare these copies whenev
 
 ## Not done yet
 
-The heart and lungs go further than the leg does so far:
 
 - Compartments, a phantom slab, idealized first-pass perfusion against ground truth, and the CT scan (BasisSimulator.jl).
 
