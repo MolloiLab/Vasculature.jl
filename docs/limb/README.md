@@ -11,7 +11,22 @@ This folder takes the leg of `docs/notebooks/02_limb_pipeline.jl` past its first
 Nothing outside this folder is changed. `src/`, the heart, lung and leg notebooks in `docs/notebooks/` and the rendered pages are as they were. The docs site does not render this folder.
 
 - `limb_pipeline.jl` is the notebook. It is `02_limb_pipeline.jl` with the changes listed below. It runs the stages that take seconds or minutes and shows what the scripts save.
-- The scripts run the long steps, patch by patch, and cache everything in `LIMB_CACHE_DIR`. Each script includes the notebook, so it reuses the notebook's functions and cached stages.
+- The scripts run the long steps, patch by patch, and cache everything in `LIMB_CACHE_DIR`. The scripts for the long steps include the notebook, so they reuse its functions and cached stages.
+
+## Quick start: use the saved results
+
+The results are made from XCAT: keep them on lab storage or a local disk, never in git (see *Licensing*).
+
+1. Unzip `limb_results.zip` from lab storage (see *Where they are*) to a local disk, with Windows Explorer or 7-Zip. Unzipped, it takes 31 GB.
+2. Set `LIMB_CACHE_DIR` to the unzipped `limb_pipeline_cache` folder, and `XCAT_LEG_NRB` to the XCAT leg file (see *The variables*).
+3. To look at the results, open these pages in a browser. No Julia is needed.
+   - `stage2_view/overview.html`, `stage2_view_veins/overview.html` and `stage2_view_both/overview.html`: the arteries, the veins, and both trees together.
+   - `transport_rest/transport_view.html` and `transport_rest/figures/figures.html`: the contrast at rest.
+   - `stenosis/figures/figures.html`: the narrowed artery.
+   - `whole_body/figures/figures.html`: the whole body.
+   - The flow has no page: its numbers are in `flow/summary.txt`, and section 7 of the notebook shows them. Every folder's `summary.txt` holds its step's numbers.
+4. To work with them, open `limb_pipeline.jl` (see *Opening the notebook*). Every stage loads from the results instead of being computed again, and section 7 shows the flow, the transport, the narrowing and the whole body.
+5. To run a script on them, see *Run order*. Each step skips what is already there.
 
 ## Licensing
 
@@ -21,6 +36,16 @@ This folder holds code and text only. The scripts read XCAT from the path in `XC
 
 ## Before running
 
+### What you need
+
+- **Julia 1.12.** The docs environment (`docs/Project.toml`) was resolved with 1.12.7. Instantiate it once, from the repository root: `julia --project=docs -e "import Pkg; Pkg.instantiate()"`. The notebook and the scripts activate it themselves.
+- **A machine like the leg workstation:** Windows, 28 threads, 32 GB of memory, no GPU. The times in *Run order* are from it.
+- **About 35 GB of disk** for `LIMB_CACHE_DIR`.
+- **On Windows,** `full_speed()` keeps a process off the efficiency cores. Without it, growth is about 6× slower there. `grow_stage2.jl` and `flow_leg.jl`, with the scripts built on it, call it themselves. On other systems it does nothing.
+- `grow_stage2.jl` stops a stuck worker with `taskkill`, or `kill -9` elsewhere.
+
+### The variables
+
 | Variable | What it is |
 |---|---|
 | `XCAT_LEG_NRB` | XCAT's both-legs NURBS file, `both_legs_1.nrb` (licensed). On lab storage: `Yishu\both_legs_1.nrb` on the lab's `Molloilab` share (`Z:\Yishu\both_legs_1.nrb` on the leg workstation). It is read only when the leg is built from scratch: the saved results already hold what the notebook takes from it (`leg_surfaces.jls`, `muscle.jls`) |
@@ -28,13 +53,21 @@ This folder holds code and text only. The scripts read XCAT from the path in `XC
 | `LIMB_NOTEBOOK` | optional: another copy of the notebook for the scripts to include |
 | `STAGE2_LIMIT_S` | optional: `grow_stage2.jl`'s time limit per patch, in seconds |
 
-The scripts stop if `XCAT_LEG_NRB` or `LIMB_CACHE_DIR` is not set. Set them even where the notebook's defaults would do.
+The scripts stop if `XCAT_LEG_NRB` or `LIMB_CACHE_DIR` is not set. Set them even where the notebook's defaults would do. A program sees the variables only if it starts after they are set.
 
-The notebook and the scripts use the docs environment (`docs/Project.toml`). Run `Pkg.instantiate()` there once.
+- **Windows,** for every new terminal: `setx LIMB_CACHE_DIR "D:\limb_results\limb_pipeline_cache"` (an example path), and the same for `XCAT_LEG_NRB`. For the current PowerShell only: `$env:LIMB_CACHE_DIR = "D:\limb_results\limb_pipeline_cache"`.
+- **macOS and Linux:** `export LIMB_CACHE_DIR=/path/to/limb_pipeline_cache`, and the same for `XCAT_LEG_NRB`, in the shell that starts Julia or in `~/.zshrc`.
 
-The scripts were run on a Windows workstation with 28 threads and no GPU. The times below are from that machine.
-- On Windows, `full_speed()` keeps a process off the efficiency cores. Without it, growth is about 6× slower there. On other systems it does nothing.
-- `grow_stage2.jl` stops a stuck worker with `taskkill`, or `kill -9` elsewhere.
+### Opening the notebook
+
+- **With Pluto,** from the repository root, in Julia:
+
+  ```julia
+  import Pluto   # once, if Pluto is missing: import Pkg; Pkg.add("Pluto")
+  Pluto.run(notebook = "docs/limb/limb_pipeline.jl")
+  ```
+
+- **With SpaceStation** (the package's *Getting Started*), open the file: `spacestation docs/limb/limb_pipeline.jl`. Opening the folder drops the environment variables, and the notebook then falls back to its defaults: `~/Documents/dev/MolloiLab/xcat-data/legs/both_legs_1.nrb` and `~/xcat-perfused/limb_pipeline_cache`. Unzipping the results into `~/xcat-perfused/` puts them in that default folder, which works either way.
 
 ## Run order
 
@@ -42,7 +75,7 @@ Run from this folder: `cd docs/limb`.
 
 | Step | Command | Time | Writes to `LIMB_CACHE_DIR` |
 |---|---|---|---|
-| 1. The notebook: geometry, pass 1, patches, a sample of pass 2 | open `limb_pipeline.jl` in Pluto | minutes the first time | the cached stages (`*.jls`) |
+| 1. The notebook: geometry, pass 1, patches, a sample of pass 2 | open `limb_pipeline.jl` (see *Opening the notebook*) | minutes the first time | the cached stages (`*.jls`) |
 | 2. Pass 2, arteries | `julia grow_stage2.jl arteries` | about 1 h 40 min | `patch_<k>.jls`, `stage2_progress.log` |
 | 3. Pass 2, veins | `julia grow_stage2.jl veins` | about 1 h 45 min | `vein_patch_<k>.jls` |
 | 4. A look at both trees, with checks | `julia -t auto view_stage2.jl`, then `julia -t auto view_stage2.jl veins`, then `julia view_stage2.jl both` | a few minutes each | `stage2_view*/` |
@@ -57,6 +90,55 @@ Run from this folder: `cd docs/limb`.
 - Each step skips what is already cached, so a stopped run carries on where it left off.
 - `flow_leg.jl test`, `transport_leg.jl test` and `stenosis_leg.jl test` check a few patches and only write to the step's `progress.log`.
 - `inputcurve_check.jl` reproduces a precision issue in the package (see *Known issues in the package*). It uses a made-up input, so it does not need XCAT.
+- From scratch, all the steps take about 6.5 hours on the leg workstation.
+
+## Files in this folder
+
+| File | What it does | Needs XCAT or its results |
+|---|---|---|
+| `README.md` | this page | no |
+| `limb_pipeline.jl` | the notebook: every stage up to a sample of pass 2, and section 7's results | yes |
+| `grow_stage2.jl` | pass 2: grows every arterial or venous patch | yes |
+| `view_stage2.jl` | draws and checks both trees | yes |
+| `flow_leg.jl` | the flow, at rest and at maximal dilation | yes |
+| `transport_leg.jl` | the contrast transport at rest, in the body model | yes |
+| `transport_view.jl` | builds the transport's page | yes |
+| `transport_view_page.jl` | the page's template: draws whatever data it is given | no |
+| `transport_figs.jl` | the transport's slide figures | yes |
+| `transport_figs_plot.jl` | draws those figures; the other figures share its helpers and colours | no |
+| `stenosis_leg.jl` | the narrowed superficial femoral artery | yes |
+| `stenosis_figs.jl` | its figures and tables | yes |
+| `stenosis_figs_plot.jl` | draws them | no |
+| `whole_body.jl` | the iodine in every organ of the body | yes |
+| `whole_body_figs.jl` | its figures and tables | yes |
+| `whole_body_figs_plot.jl` | draws them | no |
+| `inputcurve_check.jl` | shows the package's `InputCurve` precision issue on a made-up input | no |
+
+The drawing files (`*_plot.jl`, `transport_view_page.jl`) only take numbers and draw. A figure can be changed there without running anything else, and made-up numbers can check its layout without XCAT.
+
+## When you change something
+
+Every stage is kept in `LIMB_CACHE_DIR`. Whenever its file is there, it is loaded instead of computed, and nothing checks whether it is out of date. After a change, delete what depends on it, then run again:
+
+| You change | Delete from `LIMB_CACHE_DIR` | Then run again from |
+|---|---|---|
+| A notebook stage in sections 1–5 | that stage's file and every later one (`leg_surfaces`, `leg`, `muscle`, `inlets`, `pass1`, then `patches` and `vein_patches`), every `patch_<k>.jls` and `vein_patch_<k>.jls`, and every folder | step 1 |
+| Pass 2 of one tree (section 6) | that tree's `patch_<k>.jls` or `vein_patch_<k>.jls`, the `stage2_view*` folders, and `flow`, `transport_rest`, `stenosis` and `whole_body` | step 2 or 3 |
+| `LIMB_FLOW`, or `flow_leg.jl` | `flow`, `transport_rest`, `stenosis` and `whole_body` | step 5 |
+| The injection, or `transport_leg.jl` | `transport_rest` and `whole_body` | step 6 |
+| The narrowing, or `stenosis_leg.jl` | `stenosis` | step 8 |
+| `whole_body.jl` | `whole_body` | step 10 |
+| A figure only | nothing: the figure scripts draw again each time | that figure's step |
+
+## Common problems
+
+| Problem | Why | What to do |
+|---|---|---|
+| The zip will not open | `unzip` in Git Bash cannot read a zip this large | Use Windows Explorer or 7-Zip |
+| Everything is slow | The results are read over the network | Unzip them to a local disk and set `LIMB_CACHE_DIR` there |
+| Growth is about 6× slower than in *Run order* | Windows runs the process on its efficiency cores | See `full_speed()` in *What you need*; the scripts warn when it fails |
+| The notebook computes stages that should be saved | It does not see your `LIMB_CACHE_DIR`: it started before the variable was set, or SpaceStation opened the folder | Restart the terminal, Pluto or SpaceStation. In SpaceStation, open the file |
+| A script stops at once | `XCAT_LEG_NRB` or `LIMB_CACHE_DIR` is not set | Set both, even where the notebook's defaults would do |
 
 ## What `limb_pipeline.jl` changes from `02_limb_pipeline.jl`
 
@@ -199,7 +281,7 @@ That folder holds every cached stage, both trees among them (`patch_<k>.jls` and
 
 | Step | Numbers | Figures |
 |---|---|---|
-| Both trees | `stage2_view*/summary.txt` | `stage2_view/overview.html` |
+| Both trees | `stage2_view*/summary.txt` | `stage2_view*/overview.html` |
 | Flow | `flow/summary.txt` | tables in section 7 of the notebook |
 | Contrast at rest | `transport_rest/summary.txt` | `transport_rest/figures/figures.html`, `transport_rest/transport_view.html` |
 | Narrowed artery | `stenosis/summary.txt` | `stenosis/figures/figures.html` |
