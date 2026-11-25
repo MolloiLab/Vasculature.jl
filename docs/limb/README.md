@@ -130,16 +130,6 @@ Every stage is kept in `LIMB_CACHE_DIR`. Whenever its file is there, it is loade
 | `whole_body.jl` | `whole_body` | step 10 |
 | A figure only | nothing: the figure scripts draw again each time | that figure's step |
 
-## Common problems
-
-| Problem | Why | What to do |
-|---|---|---|
-| The zip will not open | `unzip` in Git Bash cannot read a zip this large | Use Windows Explorer or 7-Zip |
-| Everything is slow | The results are read over the network | Unzip them to a local disk and set `LIMB_CACHE_DIR` there |
-| Growth is about 6× slower than in *Run order* | Windows runs the process on its efficiency cores | See `full_speed()` in *What you need*; the scripts warn when it fails |
-| The notebook computes stages that should be saved | It does not see your `LIMB_CACHE_DIR`: it started before the variable was set, or SpaceStation opened the folder | Restart the terminal, Pluto or SpaceStation. In SpaceStation, open the file |
-| A script stops at once | `XCAT_LEG_NRB` or `LIMB_CACHE_DIR` is not set | Set both, even where the notebook's defaults would do |
-
 ## What `limb_pipeline.jl` changes from `02_limb_pipeline.jl`
 
 - **Terminals.** 7 µm terminal arterioles instead of 10 µm; section 3 gives the reasons.
