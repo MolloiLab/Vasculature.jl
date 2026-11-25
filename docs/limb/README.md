@@ -87,8 +87,6 @@ A copy does not follow later changes to the package. Compare these copies whenev
 
 The heart and lungs go further than the leg does so far:
 
-- The leg's presets in the package: `LIMB_GROWTH` and `LIMB_FLOW` in `src/organs.jl`, with their sources in `test/reference/` and tests.
-- Transport at maximal dilation. It waits on the adenosine route: intra-arterial, the leg alone, as in the measurements behind `r_total_dilated`; or intravenous, the whole body, as in the heart's protocol. Then the femoral AIF.
 - Compartments, a phantom slab, idealized first-pass perfusion against ground truth, and the CT scan (BasisSimulator.jl).
 
 ## Known issues in the package
