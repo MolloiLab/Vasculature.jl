@@ -23,7 +23,7 @@ This folder holds code and text only. The scripts read XCAT from the path in `XC
 
 | Variable | What it is |
 |---|---|
-| `XCAT_LEG_NRB` | XCAT's both-legs NURBS file (licensed, on lab storage) |
+| `XCAT_LEG_NRB` | XCAT's both-legs NURBS file, `both_legs_1.nrb` (licensed). On lab storage: `Yishu\both_legs_1.nrb` on the lab's `Molloilab` share (`Z:\Yishu\both_legs_1.nrb` on the leg workstation). It is read only when the leg is built from scratch: the saved results already hold what the notebook takes from it (`leg_surfaces.jls`, `muscle.jls`) |
 | `LIMB_CACHE_DIR` | where every stage, result and figure is written (lab storage or local scratch, never the repository). To start from the saved results: the unzipped `limb_pipeline_cache` (see *Where they are*) |
 | `LIMB_NOTEBOOK` | optional: another copy of the notebook for the scripts to include |
 | `STAGE2_LIMIT_S` | optional: `grow_stage2.jl`'s time limit per patch, in seconds |
