@@ -15,7 +15,7 @@ Nothing outside this folder is changed. `src/`, the heart, lung and leg notebook
 
 ## Licensing
 
-XCAT is licensed. The XCAT leg file, and everything made from it, stay on lab storage. That covers trees, caches, results, figures and pages. None of it belongs in git, an issue or a pull request.
+XCAT is licensed. The XCAT leg file, and everything made from it, stay on lab storage. That covers trees, caches, result files, figures and pages. None of it belongs in git, an issue or a pull request.
 
 This folder holds code and text only. The scripts read XCAT from the path in `XCAT_LEG_NRB` and write only to `LIMB_CACHE_DIR`.
 
@@ -100,24 +100,97 @@ Found while building the leg. They are not fixed here.
 
 ## Results so far
 
-In words only. The numbers and figures are made from XCAT, so they stay with the results (see *Licensing*).
+The main numbers of each step are below. The figures and the result files stay on lab storage (see *Licensing*).
 
-### What they show
+### Both trees
 
-- **Both trees.** Every arterial and venous patch grew its full number of terminals; none failed or ran out of time. The terminal radii are close to their targets, and virtually no terminal ends inside an imaged artery or vein.
-- **Flow.** Every check in section 7 passes.
-  - The flow at maximal dilation meets its target.
-  - At rest, the flow agrees with the leg's oxygen balance and with measured values, and the oxygen left in the femoral vein is on target.
-  - No bed's flow reverses, and at rest no vessel is at full tone.
-  - At maximal dilation, the flow per gram and the pressure reaching the tissue rise from the foot to the thigh.
-- **Contrast at rest.** Contrast reaches the thigh first and the foot last. The femoral vein's outflow peaks well after the arterial input, and much lower. At the end of the run, 120 s after the injection, every part of the leg holds about the same iodine per mL of tissue, still rising slowly, most of it in the capillary beds. What the leg holds matches what the body sends it, within the body model's own bookkeeping.
-- **A narrowed superficial femoral artery.**
-  - At rest, the flow below the narrowing holds until the narrowing is severe, then falls steeply; the foot loses the most. Once the flow falls, the tissue below runs short of oxygen and its arterioles open fully.
-  - At maximal dilation, the flow below falls from the start and is far lower already at moderate narrowing.
-  - The thigh above the narrowing keeps its flow, and at maximal dilation takes slightly more.
-- **The iodine in the whole body.** The iodine passes the large veins, the heart chambers and the lungs first, then the aorta and the organs. The grown right leg fills slowly, peaks late and keeps nearly all of its iodine to the end. It holds more than the body's lumped left leg, because its exchange with the tissue, its flow and its blood volume are all higher. The liver and gut and the rest of the body are still filling at the end.
+Every patch grew its full number of terminals; none failed or ran out of time. Virtually no terminal ends inside an imaged artery or vein.
 
-### Where the numbers and figures are
+| | Arteries | Veins |
+|---|---|---|
+| Patches | 1588 | 1715 |
+| Terminals | 171.26 million | 171.26 million |
+| Segments | 342.5 million | 342.5 million |
+| Terminal radius, median (target) | 6.77 µm (7) | 11.88 µm (12.2) |
+
+### Flow
+
+Every check in section 7 passes.
+
+| | Result | Target |
+|---|---|---|
+| Maximal flow | 3704 mL/min (0.291 mL/min/g) | 3700 mL/min |
+| Resting flow | 325 mL/min (0.0256 mL/min/g) | 0.0255 mL/min/g from the oxygen balance; measured 300 ± 30 and 353 mL/min |
+| Flow reserve | 11.4 | |
+| Oxygen saturation in the femoral vein at rest | 0.662 | 0.662 |
+| Oxygen use at rest | 18.6 mL/min | 18–28 mL/min |
+| Beds with reversed flow, at rest and at maximal flow | 0 | 0 |
+| Patches with a vessel at full tone, at rest | 0 | 0 |
+
+At maximal dilation, from the foot to the top of the thigh, the flow rises from 0.156 to 0.311 mL/min/g, and the pressure at the patches' inlets from 64 to 80 mmHg.
+
+### Contrast at rest
+
+The leg takes 325 mL/min of the body's 4896 mL/min cardiac output (6.65%).
+
+| | Arrives | Peak | Peak at |
+|---|---|---|---|
+| Input, from the abdominal aorta | 12.4 s | 15.42 mg/mL | 19.3 s |
+| Outflow, into the femoral vein | 54.5 s | 1.82 mg/mL | 91.8 s |
+
+Iodine per mL of tissue, in mg/mL. The contrast reaches the thigh first and the foot last:
+
+| Part | Tissue | At 30 s | At 60 s | At 120 s |
+|---|---|---|---|---|
+| Foot | 899 mL | 0.001 | 0.086 | 0.097 |
+| Calf | 1798 mL | 0.025 | 0.094 | 0.098 |
+| Knee | 3589 mL | 0.049 | 0.095 | 0.098 |
+| Thigh | 6201 mL | 0.060 | 0.095 | 0.099 |
+
+- At 120 s the leg holds 1482 mg of the 15,924 mg injected (9.3%), 1019 mg of it in the capillary beds. That matches what the body sends it, within the body model's own bookkeeping.
+- Plasma in the leg: 247 mL. Mean transit time: 82.8 s.
+
+### A narrowed superficial femoral artery
+
+The narrowing is 20 mm long, in the adductor canal. Its middle is 13 cm above the knee joint.
+
+| Narrowing (diameter) | Flow through it, rest | Flow through it, maximal | Pressure below it, rest | Pressure below it, maximal |
+|---|---|---|---|---|
+| None | 113 mL/min | 1139 mL/min | 89.1 mmHg | 83.8 mmHg |
+| 50% | 113 | 775 | 88.0 | 63.2 |
+| 70% | 113 | 326 | 79.4 | 36.6 |
+| 80% | 108 | 131 | 41.1 | 23.7 |
+| 85% | 59 | 61 | 21.6 | 18.3 |
+| 90% | 17 | 17 | 14.0 | 14.1 |
+| 95% | 1.3 | 1.4 | 11.2 | 11.7 |
+
+- At rest the flow holds until the narrowing is severe, then falls steeply. At maximal dilation it falls from the start.
+- The foot loses the most at rest: at 85% it keeps 44% of its flow, the other parts below the narrowing 54–56%.
+- At 90%, at rest, the oxygen saturation of the blood leaving the parts below falls from 0.66 to 0.12–0.25, and their arterioles open fully.
+- The thigh above the narrowing keeps its flow: 100% at rest, and up to 102% at maximal dilation.
+
+### The iodine in the whole body
+
+15,924 mg of iodine injected into the right arm at rest, as in the body model, with the grown leg as the body's right leg. Iodine as % of the dose:
+
+| | Blood flow (mL/min) | Peak | Peak at | At 120 s |
+|---|---|---|---|---|
+| Large veins | | 43% | 7.0 s | 1.8% |
+| Heart chambers | 4896 | 20% | 10.2 s | 2.5% |
+| Lungs | 4896 | 57% | 12.5 s | 8.4% |
+| Aorta | | 15% | 18.0 s | 1.5% |
+| Brain | 588 | 5.6% | 22.6 s | 0.9% |
+| Heart muscle | 162 | 1.6% | 24.7 s | 1.0% |
+| Kidneys | 930 | 10% | 26.5 s | 3.0%, and 6.2% in urine |
+| Grown right leg | 325 | 9.3% | 86.2 s | 9.3% |
+| Liver and gut | 1224 | still rising | | 29.6% |
+| Rest of the body | 1177 | still rising | | 25.1% |
+| Left leg (the body model's own) | 294 | still rising | | 6.3% |
+| Arms | 196 | still rising | | 4.2% |
+
+The grown right leg holds 1.5 times the left leg's iodine at 120 s (1482 against 998 mg). Its flow is about 10% higher, and its exchange with the tissue and its blood volume are higher too.
+
+### Where the full numbers and the figures are
 
 In `LIMB_CACHE_DIR`:
 
