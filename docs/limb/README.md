@@ -17,7 +17,7 @@ Nothing outside this folder is changed. `src/`, the heart, lung and leg notebook
 
 The results are made from XCAT: keep them on lab storage or a local disk, never in git (see *Licensing*).
 
-1. Unzip `limb_results.zip` from lab storage (see *Where they are*) to a local disk, with Windows Explorer or 7-Zip. Unzipped, it takes 31 GB.
+1. Unzip `limb_results.zip` from share drive (see *Where they are*) to a local disk, with Windows Explorer or 7-Zip. Unzipped, it takes 31 GB.
 2. Set `LIMB_CACHE_DIR` to the unzipped `limb_pipeline_cache` folder, and `XCAT_LEG_NRB` to the XCAT leg file (see *The variables*).
 3. To look at the results, open these pages in a browser. No Julia is needed.
    - `stage2_view/overview.html`, `stage2_view_veins/overview.html` and `stage2_view_both/overview.html`: the arteries, the veins, and both trees together.
